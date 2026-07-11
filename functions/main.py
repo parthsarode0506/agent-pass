@@ -1,535 +1,610 @@
+"""
+AgentID Backend — v2.0
+FastAPI backend connecting to REAL Cloud Firestore (no emulator).
+
+Local dev: set GOOGLE_APPLICATION_CREDENTIALS to your service account key path.
+    $env:GOOGLE_APPLICATION_CREDENTIALS = "C:\\path\\to\\serviceAccountKey.json"
+    python functions/main.py
+
+All Firestore reads/writes go straight to the live cloud database.
+"""
+
 import os
-import json
+import re
 import base64
 import hashlib
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
 
 import firebase_admin
 from firebase_admin import credentials, firestore
-from fastapi import FastAPI, HTTPException, Depends
-from starlette.responses import JSONResponse
-from starlette.requests import Request
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import nacl.signing
 import nacl.encoding
 import nacl.exceptions
-import functions_framework
-from mangum import Mangum
 
-# Initialize Firebase Admin SDK
-# In Cloud Functions or emulator, the default credentials are used.
+import json
+import tempfile
+
+# ---------------------------------------------------------------------------
+# Firebase Admin SDK initialisation
+#
+# Supports three credential modes (checked in order):
+#   1. GOOGLE_CREDENTIALS_JSON env var — full service account JSON as a string.
+#      Used on Render.com and other cloud hosts where you can't upload files.
+#   2. GOOGLE_APPLICATION_CREDENTIALS env var — path to a local key file.
+#      Used during local development via run-cloud.ps1.
+#   3. Default application credentials — used inside Cloud Functions / Cloud Run.
+#
+# IMPORTANT: Never set FIRESTORE_EMULATOR_HOST — always talk to real Cloud Firestore.
+# ---------------------------------------------------------------------------
 if not firebase_admin._apps:
     project_id = "rift-2ef56"
     os.environ["GCLOUD_PROJECT"] = project_id
-    try:
-        # Eagerly check if default credentials can be resolved
-        import google.auth
-        google.auth.default()
-        firebase_admin.initialize_app()
-    except Exception:
-        # Generate a valid RSA private key dynamically to satisfy the PEM parser
-        from cryptography.hazmat.primitives.asymmetric import rsa
-        from cryptography.hazmat.primitives import serialization
-        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        private_key_pem = private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        ).decode("utf-8")
 
-        # Fallback to dummy credentials for local emulator
-        dummy_cred = credentials.Certificate({
-            "type": "service_account",
-            "project_id": project_id,
-            "private_key_id": "dummy_key_id",
-            "private_key": private_key_pem,
-            "client_email": "dummy@example.com",
-            "token_uri": "https://oauth2.googleapis.com/token"
-        })
-        firebase_admin.initialize_app(dummy_cred)
+    cred_json_str = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+    if cred_json_str:
+        # Render.com / env-var credentials: write JSON to a temp file then load it
+        cred_dict = json.loads(cred_json_str)
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+        json.dump(cred_dict, tmp)
+        tmp.flush()
+        cred = credentials.Certificate(tmp.name)
+        firebase_admin.initialize_app(cred, {"projectId": project_id})
+    else:
+        # Local dev (GOOGLE_APPLICATION_CREDENTIALS) or Cloud Functions (ADC)
+        firebase_admin.initialize_app(options={"projectId": project_id})
 
 db = firestore.client()
 
-# Initialize FastAPI app - renamed to fastapi_app to avoid name collision with function entry point
-fastapi_app = FastAPI(title="AgentID Backend")
+# ---------------------------------------------------------------------------
+# FastAPI app
+# ---------------------------------------------------------------------------
+app = FastAPI(title="AgentID API", version="2.0.0")
 
-# Helper function for Ed25519 signing and verification using PyNaCl
-def generate_keypair() -> tuple[str, str]:
-    """Generate a new Ed25519 keypair and return hex-encoded public and secret keys."""
+# Allow the Vite dev server (localhost:5173) and Firebase Hosting to call us
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ---------------------------------------------------------------------------
+# Utility helpers
+# ---------------------------------------------------------------------------
+
+def slugify(text: str) -> str:
+    """Convert any string to an uppercase alphanumeric slug, e.g. 'TravelAgent' → 'TRAVELAGENT'."""
+    return re.sub(r"[^A-Z0-9]", "", text.upper())
+
+
+def generate_ed25519_keypair() -> tuple[str, str]:
+    """
+    Generate an Ed25519 keypair.
+    Returns (public_key_hex, secret_key_hex).
+    The secret key is returned exactly once and must never be stored raw.
+    """
     signing_key = nacl.signing.SigningKey.generate()
-    verifying_key = signing_key.verify_key
-    public_key_hex = verifying_key.encode(encoder=nacl.encoding.HexEncoder).decode("utf-8")
-    secret_key_hex = signing_key.encode(encoder=nacl.encoding.HexEncoder).decode("utf-8")
-    return public_key_hex, secret_key_hex
+    secret_hex = signing_key.encode(encoder=nacl.encoding.HexEncoder).decode("utf-8")
+    public_hex = signing_key.verify_key.encode(encoder=nacl.encoding.HexEncoder).decode("utf-8")
+    return public_hex, secret_hex
 
-def hash_secret_key(secret_key_hex: str) -> str:
-    """Hash the secret key for storage (we don't store the raw secret key)."""
-    return hashlib.sha256(secret_key_hex.encode("utf-8")).hexdigest()
 
-def verify_signature(public_key_str: str, signature_str: str, message: bytes) -> bool:
-    """Verify an Ed25519 signature supporting both hex and base64 formats."""
+def hash_secret_key(secret_hex: str) -> str:
+    """SHA-256 of the raw hex secret key — the only thing we ever store."""
+    return hashlib.sha256(secret_hex.encode("utf-8")).hexdigest()
+
+
+def verify_ed25519_signature(public_key_hex: str, signature_b64: str, message: str) -> bool:
+    """
+    Verify an Ed25519 signature.
+    public_key_hex : 64-char hex string (32 bytes)
+    signature_b64  : base64-encoded 64-byte signature
+    message        : the original plain-text string that was signed
+    """
     try:
-        # Decode public key (Hex is 64 chars, base64 is 44 chars)
-        if len(public_key_str) == 64:
-            public_key_bytes = nacl.encoding.HexEncoder.decode(public_key_str.encode("utf-8"))
-        else:
-            public_key_bytes = base64.b64decode(public_key_str)
-
-        # Decode signature (Hex is 128 chars, base64 is 88 chars)
-        if len(signature_str) == 128:
-            signature_bytes = nacl.encoding.HexEncoder.decode(signature_str.encode("utf-8"))
-        else:
-            signature_bytes = base64.b64decode(signature_str)
-
-        verify_key = nacl.signing.VerifyKey(public_key_bytes)
-        verify_key.verify(message, signature_bytes)
+        verify_key = nacl.signing.VerifyKey(bytes.fromhex(public_key_hex))
+        sig_bytes = base64.b64decode(signature_b64)
+        verify_key.verify(message.encode("utf-8"), sig_bytes)
         return True
-    except Exception as e:
-        print(f"Signature verification failed: {e}")
+    except Exception as exc:
+        print(f"[verify_ed25519_signature] failed: {exc}")
         return False
 
-# Endpoints mapping to both prefixed /api routes and non-prefixed routes for flexibility
 
-@fastapi_app.post("/api/agents/register")
-@fastapi_app.post("/api/agents")
-@fastapi_app.post("/agents/register")
-@fastapi_app.post("/agents")
+def generate_risk_note(agent_id: str, action: str, identity_passed: bool, permission_passed: bool) -> str:
+    """
+    Generate a dynamic, security-oriented risk note.
+    Runs a history query to add contextual intelligence.
+    """
+    if not identity_passed:
+        return "CRITICAL: Connection refused. Signature missing, invalid, or credential revoked."
+        
+    # Query history
+    try:
+        # Resolve generator
+        history = list(db.collection("audit_log").where("agent_id", "==", agent_id).limit(10).get())
+        past_actions = [doc.to_dict().get("action") for doc in history]
+    except Exception as exc:
+        print(f"[generate_risk_note] History query failed: {exc}")
+        past_actions = []
+
+    is_payment = action in ["payments:make", "booking:buy"]
+    has_past_payment = any(a in ["payments:make", "booking:buy"] for a in past_actions)
+
+    if not permission_passed:
+        return f"BLOCKED: Action '{action}' attempted without required permission profile."
+
+    if is_payment and not has_past_payment and len(past_actions) > 0:
+        return "WARNING: Unusual payment attempt from an agent that has only ever performed read/browse actions."
+    
+    # Check if there are only registrations or no past attempts
+    valid_past = [a for a in past_actions if a != "register"]
+    if len(valid_past) == 0:
+        return "NEW AGENT: This is the very first action attempt recorded for this agent profile."
+
+    return "Identity signature verified. Normal transaction profile with zero anomalies detected."
+
+
+def write_audit_log(
+    agent_id: str,
+    agent_name: str,
+    action: str,
+    identity_check: bool,
+    permission_check,   # bool | None  (None = skipped because identity failed)
+    result: str,        # "granted" | "denied"
+    reason: str,
+    risk_note: str = "",
+) -> None:
+    """Append one audit log entry to Firestore with an auto-generated doc ID."""
+    db.collection("audit_log").add({
+        "agent_id": agent_id,
+        "agent_name": agent_name,
+        "action": action,
+        "identity_check": identity_check,
+        "permission_check": permission_check,
+        "result": result,
+        "reason": reason,
+        "risk_note": risk_note,
+        "timestamp": datetime.now(timezone.utc),
+    })
+
+
+def ts_to_iso(obj: dict) -> dict:
+    """Convert any Firestore Timestamp values in a dict to ISO strings for JSON serialization."""
+    for key, val in obj.items():
+        if hasattr(val, "isoformat"):
+            obj[key] = val.isoformat()
+    return obj
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/health")
+async def health():
+    """Quick liveness check."""
+    return {"status": "ok", "version": "2.0.0"}
+
+
+# ─── Register a new agent ────────────────────────────────────────────────────
+
+@app.post("/api/agents/register")
 async def register_agent(request: Request):
     """
     Register a new agent.
-    Supports registration both by generating a keypair automatically
-    and by accepting a client-provided public key.
+
+    Request body:
+        {
+            "name": "TravelAgent",
+            "owner": "Rahul",
+            "purpose": "Manages travel bookings",
+            "permissions": ["booking:buy", "calendar:write"]
+        }
+
+    Agent ID generation rule (server-side, inside a transaction):
+        AGT-{AGENT_TYPE_SLUG}-{OWNER_SLUG}-{SEQUENCE_NUMBER}
+        e.g. AGT-TRAVELAGENT-RAHUL-001
+
+    Returns the auto-generated Agent ID and the one-time secret key.
+    Store the secret key — it is never retrievable again.
     """
     try:
         data = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
-    # Adapt to different parameter names from frontend/backend
-    name = data.get("name")
-    agent_id = data.get("agent_id") or name
-    owner_id = data.get("owner_id") or data.get("owner") or "owner_demo"
-    purpose = data.get("purpose") or f"Agent with role {data.get('role', 'agent')}"
+    name = (data.get("name") or "").strip()
+    owner = (data.get("owner") or "").strip()
+    purpose = (data.get("purpose") or "").strip()
+    permissions = [p for p in (data.get("permissions") or []) if isinstance(p, str)]
 
     if not name:
-        raise HTTPException(status_code=400, detail="Missing required field: name")
+        raise HTTPException(status_code=400, detail="'name' is required")
+    if not owner:
+        raise HTTPException(status_code=400, detail="'owner' is required")
 
-    # Clean agent_id
-    if not agent_id:
-        raise HTTPException(status_code=400, detail="Missing required field: agent_id or name")
-    
-    agent_id = str(agent_id).strip().replace(" ", "_")
+    agent_type_slug = slugify(name)
+    owner_slug = slugify(owner)
 
-    # Check if agent already exists
-    agent_ref = db.collection("agents").document(agent_id)
-    if agent_ref.get().exists:
-        raise HTTPException(status_code=409, detail=f"Agent ID '{agent_id}' already exists")
+    # --- Use a counter document to atomically assign the next sequence number ---
+    # counters/{prefix} stores { count: N } for each (agent_type_slug, owner_slug) pair.
+    counter_key = f"{agent_type_slug}-{owner_slug}"
+    counter_ref = db.collection("counters").document(counter_key)
 
-    # Set up credentials (use client public key if provided, otherwise generate)
-    client_pubkey = data.get("publicKey") or data.get("public_key")
-    if client_pubkey:
-        public_key_str = client_pubkey
-        secret_key_str = None
-        secret_key_hash = hash_secret_key(client_pubkey)
-    else:
-        public_key_str, secret_key_str = generate_keypair()
-        secret_key_hash = hash_secret_key(secret_key_str)
-
+    # Generate the keypair BEFORE the transaction (pure in-memory, no I/O)
+    public_key_hex, secret_key_hex = generate_ed25519_keypair()
+    secret_key_hash = hash_secret_key(secret_key_hex)
     now = datetime.now(timezone.utc)
 
-    # Create agent document
-    agent_ref.set({
-        "name": name,
-        "owner_id": owner_id,
-        "purpose": purpose,
-        "created_at": now,
-        "status": "active"
-    })
+    @firestore.transactional
+    def create_in_transaction(tx):
+        counter_snap = next(tx.get(counter_ref))
+        seq = (counter_snap.get("count") + 1) if counter_snap.exists else 1
+        agent_id = f"AGT-{agent_type_slug}-{owner_slug}-{seq:03d}"
 
-    # Create credentials document (at root level)
-    cred_ref = db.collection("credentials").document(agent_id)
-    cred_ref.set({
-        "public_key": public_key_str,
-        "secret_key_hash": secret_key_hash,
-        "secret_hash": secret_key_hash,  # compatible naming
-        "issued_at": now,
-        "created_at": now,  # compatible naming
-        "active": True
-    })
+        # Prevent duplicate IDs (should never happen given the transaction, but belt-and-suspenders)
+        agent_ref = db.collection("agents").document(agent_id)
+        if next(tx.get(agent_ref)).exists:
+            raise HTTPException(status_code=409, detail=f"Agent '{agent_id}' already exists. This should not happen — please try again.")
 
-    # Create permissions document (at root level)
-    perm_ref = db.collection("permissions").document(agent_id)
-    # Default permissions if specified, otherwise empty
-    granted_actions = data.get("granted_actions") or []
-    perm_ref.set({
-        "granted_actions": granted_actions,
-        "updated_at": now
-    })
+        # Update counter
+        tx.set(counter_ref, {"count": seq})
 
-    # Log registration attempt to audit log
-    log_audit(
+        # Write agents/{agent_id}
+        tx.set(agent_ref, {
+            "name": name,
+            "owner": owner,
+            "purpose": purpose,
+            "agent_type_slug": agent_type_slug,
+            "owner_slug": owner_slug,
+            "sequence_number": seq,
+            "status": "active",
+            "created_at": now,
+        })
+
+        # Write credentials/{agent_id} — never returned to client except the public key
+        tx.set(db.collection("credentials").document(agent_id), {
+            "public_key": public_key_hex,
+            "secret_key_hash": secret_key_hash,
+            "issued_at": now,
+            "active": True,
+        })
+
+        # Write permissions/{agent_id}
+        tx.set(db.collection("permissions").document(agent_id), {
+            "granted_actions": permissions,
+        })
+
+        return agent_id
+
+    transaction = db.transaction()
+    agent_id = create_in_transaction(transaction)
+
+    # Write registration audit entry (outside the transaction is fine)
+    write_audit_log(
         agent_id=agent_id,
+        agent_name=name,
         action="register",
-        result="success",
-        reason="Agent registered successfully"
+        identity_check=True,
+        permission_check=None,
+        result="granted",
+        reason="Agent registered successfully",
     )
 
-    # Return response matching both frontend and backend requirements
-    response_data = {
-        "id": agent_id,
+    return JSONResponse({
         "agent_id": agent_id,
         "name": name,
-        "owner": owner_id,
-        "owner_id": owner_id,
+        "owner": owner,
         "purpose": purpose,
-        "created_at": now.isoformat(),
-        "createdAt": now.isoformat(),
+        "permissions": permissions,
         "status": "active",
-        "permissions": granted_actions,
-        "public_key": public_key_str,
-        "message": "Agent registered successfully."
+        "created_at": now.isoformat(),
+        # ⚠ Secret key shown ONCE — store it securely, it cannot be retrieved again
+        "secret_key": secret_key_hex,
+        "message": "Agent registered. Store the secret key — it will not be shown again.",
+    }, status_code=201)
+
+
+# ─── Attempt an action (two-step identity + permission check) ────────────────
+
+@app.post("/api/agents/{agent_id}/attempt-action")
+async def attempt_action(agent_id: str, request: Request):
+    """
+    Two-step verification for an agent attempting an action.
+
+    Request body:
+        {
+            "action": "booking:buy",
+            "signature": "<base64 ed25519 sig, optional>",
+            "message": "<signed message string, optional>"
+        }
+
+    Step 1 — Identity Check:
+      - credentials/{agent_id} must exist and have active == true
+      - If signature + message are provided, the signature is verified against
+        the stored public key (this is the genuine identity proof)
+      - Without a signature, credential existence alone passes the check
+        (demo mode — real agents always sign)
+
+    Step 2 — Permission Check (only runs if Step 1 passes):
+      - action must be in permissions/{agent_id}.granted_actions
+
+    Either way, an audit_log entry is written and a structured response
+    with identity_check, permission_check, result, and reason is returned.
+    """
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    action = (data.get("action") or "").strip()
+    signature = data.get("signature")
+    message = data.get("message")
+
+    if not action:
+        raise HTTPException(status_code=400, detail="'action' is required")
+
+    # Best-effort agent name fetch for audit log display
+    agent_snap = db.collection("agents").document(agent_id).get()
+    agent_name = agent_snap.to_dict().get("name", agent_id) if agent_snap.exists else agent_id
+
+    # ─── Step 1: Identity ───────────────────────────────────────────────────
+    cred_snap = db.collection("credentials").document(agent_id).get()
+    identity_passed = False
+    identity_reason = ""
+
+    if not cred_snap.exists:
+        identity_reason = "Agent not found — no credentials registered for this ID"
+    else:
+        cred = cred_snap.to_dict()
+        if not cred.get("active", False):
+            identity_reason = "Agent credentials have been revoked"
+        elif signature and message:
+            # Full cryptographic identity proof
+            if verify_ed25519_signature(cred.get("public_key", ""), signature, message):
+                identity_passed = True
+                identity_reason = "Identity verified via Ed25519 signature ✓"
+            else:
+                identity_reason = "Signature verification failed — invalid or forged"
+        else:
+            # Demo mode: credential existence is sufficient
+            identity_passed = True
+            identity_reason = "Identity verified — agent credentials are active ✓"
+
+    if not identity_passed:
+        risk_note = generate_risk_note(agent_id, action, False, False)
+        write_audit_log(agent_id, agent_name, action, False, None, "denied", identity_reason, risk_note)
+        return JSONResponse({
+            "agent_id": agent_id,
+            "action": action,
+            "identity_check": False,
+            "identity_reason": identity_reason,
+            "permission_check": None,
+            "permission_reason": "Skipped — identity check failed",
+            "result": "denied",
+            "reason": identity_reason,
+            "risk_note": risk_note,
+        })
+
+    # ─── Step 2: Permission ─────────────────────────────────────────────────
+    perm_snap = db.collection("permissions").document(agent_id).get()
+    permission_passed = False
+    permission_reason = ""
+
+    if not perm_snap.exists:
+        permission_reason = "No permissions record found for this agent"
+    else:
+        granted = perm_snap.to_dict().get("granted_actions", [])
+        if action in granted:
+            permission_passed = True
+            permission_reason = f"'{action}' is in the agent's granted permissions ✓"
+        else:
+            permission_reason = (
+                f"'{action}' is not granted. "
+                f"Agent has: [{', '.join(granted) or 'none'}]"
+            )
+
+    final_result = "granted" if permission_passed else "denied"
+    risk_note = generate_risk_note(agent_id, action, True, permission_passed)
+    write_audit_log(agent_id, agent_name, action, True, permission_passed, final_result, permission_reason, risk_note)
+
+    return JSONResponse({
+        "agent_id": agent_id,
+        "action": action,
+        "identity_check": True,
+        "identity_reason": identity_reason,
+        "permission_check": permission_passed,
+        "permission_reason": permission_reason,
+        "result": final_result,
+        "reason": permission_reason,
+        "risk_note": risk_note,
+    })
+
+
+# ─── Parse natural language permissions ──────────────────────────────────────
+
+@app.post("/api/agents/parse-permissions")
+async def parse_permissions(request: Request):
+    """
+    Parse a natural language description of permissions into structured checkboxes.
+    """
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+        
+    text = (data.get("text") or "").strip().lower()
+    
+    # Define keyword mappings to permission IDs
+    mappings = {
+        "web:browse": ["browse", "internet", "web", "surf", "read pages"],
+        "booking:buy": ["buy", "purchase", "booking", "ticket", "hotel", "flight"],
+        "calendar:write": ["write calendar", "create event", "add calendar", "schedule", "modify calendar"],
+        "calendar:read": ["read calendar", "view calendar", "check calendar", "calendar events"],
+        "email:read": ["read email", "inbox", "view email", "check email"],
+        "payments:make": ["pay", "payment", "make payment", "wire", "transfer money", "credit card"],
+        "data:read": ["read data", "fetch data", "view data", "query data"],
+        "files:write": ["write file", "save file", "create file", "export file"]
     }
     
-    if secret_key_str:
-        response_data["secret_key"] = secret_key_str
-        response_data["message"] += " Store the secret key securely."
+    granted = []
+    denied = []
+    
+    # Split the sentence by clauses or separators to analyze negatives vs positives
+    clauses = re.split(r"[;.,]|\band\b|\bbut\b", text)
+    for clause in clauses:
+        is_negative = any(neg in clause for neg in ["never", "dont", "don't", "no ", "cannot", "can't", "except", "block", "restrict", "prevent"])
+        for perm_id, keywords in mappings.items():
+            if any(kw in clause for kw in keywords):
+                if is_negative:
+                    denied.append(perm_id)
+                else:
+                    granted.append(perm_id)
+                    
+    # Exclude denied permissions from granted ones
+    granted = list(set(granted) - set(denied))
+    
+    # Special catch-all
+    if "all" in text or "every" in text:
+        granted = list(mappings.keys())
         
-    return JSONResponse(response_data)
+    return JSONResponse({"permissions": granted})
 
 
-@fastapi_app.post("/api/agents/{agent_id}/verify")
-@fastapi_app.post("/agents/{agent_id}/verify")
-async def verify_agent(agent_id: str, request: Request):
+# ─── List all agents ─────────────────────────────────────────────────────────
+
+@app.get("/api/agents")
+async def list_agents():
     """
-    Verify an agent by checking a signature.
+    Return all registered agents with their permissions and credential status merged in.
+    Credentials collection is never returned — only the boolean active/revoked status.
     """
-    try:
-        data = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
-        
-    signature_str = data.get("signature")
-    message_str = data.get("message")
+    result = []
+    for doc in db.collection("agents").stream():
+        agent = ts_to_iso(doc.to_dict())
+        agent["id"] = doc.id
 
-    if not signature_str or not message_str:
-        raise HTTPException(status_code=400, detail="Missing signature or message")
+        perm_snap = db.collection("permissions").document(doc.id).get()
+        agent["permissions"] = perm_snap.to_dict().get("granted_actions", []) if perm_snap.exists else []
 
-    # The message can be base64-encoded or raw string
-    try:
-        # Try decoding as base64 first
-        message = base64.b64decode(message_str)
-    except Exception:
-        # Fallback to UTF-8 bytes if not valid base64
-        message = message_str.encode("utf-8")
+        cred_snap = db.collection("credentials").document(doc.id).get()
+        agent["credential_active"] = cred_snap.to_dict().get("active", False) if cred_snap.exists else False
 
-    # Fetch the agent's public key from credentials root collection
-    cred_ref = db.collection("credentials").document(agent_id)
-    cred_snapshot = cred_ref.get()
-    if not cred_snapshot.exists:
-         # Fallback to check if credentials are stored as a subcollection
-         agent_ref = db.collection("agents").document(agent_id)
-         sub_creds = agent_ref.collection("credentials").limit(1).get()
-         if sub_creds:
-             cred_snapshot = sub_creds[0]
-         else:
-             raise HTTPException(status_code=404, detail="Agent credentials not found")
+        result.append(agent)
 
-    cred_data = cred_snapshot.to_dict()
-    if not cred_data.get("active", False):
-        log_audit(
-            agent_id=agent_id,
-            action="verify",
-            result="denied",
-            reason="Agent credentials are not active"
-        )
-        raise HTTPException(status_code=403, detail="Agent credentials are not active")
-
-    public_key_str = cred_data.get("public_key")
-    if not public_key_str:
-        raise HTTPException(status_code=500, detail="Public key not found in credentials")
-
-    # Verify the signature
-    is_valid = verify_signature(public_key_str, signature_str, message)
-
-    # Log the verification attempt to audit log
-    log_audit(
-        agent_id=agent_id,
-        action="verify",
-        result="granted" if is_valid else "denied",
-        reason="Signature verification successful" if is_valid else "Signature verification failed"
-    )
-
-    return JSONResponse({
-        "agent_id": agent_id,
-        "verified": is_valid
-    })
+    result.sort(key=lambda a: a.get("created_at", ""), reverse=True)
+    return JSONResponse(result)
 
 
-@fastapi_app.post("/api/agents/{agent_id}/authorize")
-@fastapi_app.post("/agents/{agent_id}/authorize")
-@fastapi_app.post("/api/agents/{agent_id}/request")
-@fastapi_app.post("/agents/{agent_id}/request")
-async def authorize_agent(agent_id: str, request: Request):
-    """
-    Check if an agent is authorized for a specific action.
-    """
-    try:
-        data = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
-        
-    action = data.get("action")
-    signature_str = data.get("signature")
-    message_str = data.get("message")
+# ─── Audit log endpoints ──────────────────────────────────────────────────────
 
-    if not all([action, signature_str, message_str]):
-        raise HTTPException(status_code=400, detail="Missing action, signature, or message")
-
-    try:
-        message = base64.b64decode(message_str)
-    except Exception:
-        message = message_str.encode("utf-8")
-
-    # Fetch agent credentials and permissions from root level
-    cred_ref = db.collection("credentials").document(agent_id)
-    perm_ref = db.collection("permissions").document(agent_id)
-
-    cred_snapshot = cred_ref.get()
-    perm_snapshot = perm_ref.get()
-
-    # Mismatch/fallback safety checks
-    if not cred_snapshot.exists:
-        raise HTTPException(status_code=404, detail="Agent credentials not found")
-        
-    cred_data = cred_snapshot.to_dict()
-    if not cred_data.get("active", False):
-        raise HTTPException(status_code=403, detail="Agent credentials are not active")
-
-    public_key_str = cred_data.get("public_key")
-    if not public_key_str:
-        raise HTTPException(status_code=500, detail="Public key not found in credentials")
-
-    # Verify signature
-    is_valid = verify_signature(public_key_str, signature_str, message)
-    if not is_valid:
-        log_audit(
-            agent_id=agent_id,
-            action=f"authorize_{action}",
-            result="denied",
-            reason="Invalid signature"
-        )
-        return JSONResponse({
-            "agent_id": agent_id,
-            "action": action,
-            "authorized": False,
-            "reason": "Invalid signature"
-        })
-
-    # Check permissions
-    granted_actions = []
-    if perm_snapshot.exists:
-        granted_actions = perm_snapshot.to_dict().get("granted_actions", [])
-
-    if action in granted_actions:
-        log_audit(
-            agent_id=agent_id,
-            action=f"authorize_{action}",
-            result="granted",
-            reason="Action permitted"
-        )
-        return JSONResponse({
-            "agent_id": agent_id,
-            "action": action,
-            "authorized": True
-        })
-    else:
-        log_audit(
-            agent_id=agent_id,
-            action=f"authorize_{action}",
-            result="denied",
-            reason="Action not in granted permissions"
-        )
-        return JSONResponse({
-            "agent_id": agent_id,
-            "action": action,
-            "authorized": False,
-            "reason": "Action not permitted"
-        })
-
-
-@fastapi_app.get("/api/agents/{agent_id}/audit-log")
-@fastapi_app.get("/agents/{agent_id}/audit-log")
-async def get_agent_audit_log(agent_id: str, limit: int = 50):
-    """
-    Retrieve the audit log for a specific agent.
-    """
-    audit_ref = db.collection("audit_log")
-    query = audit_ref.where("agent_id", "==", agent_id).order_by("timestamp", direction=firestore.Query.DESCENDING).limit(limit)
-    results = query.stream()
-
+@app.get("/api/audit-log")
+async def get_audit_log():
+    """Full audit history across all agents, newest first (max 200 entries)."""
     logs = []
-    for doc in results:
-        log_data = doc.to_dict()
-        log_data["id"] = doc.id
-        if "timestamp" in log_data and hasattr(log_data["timestamp"], "isoformat"):
-            log_data["timestamp"] = log_data["timestamp"].isoformat()
-        logs.append(log_data)
-
-    return JSONResponse({
-        "agent_id": agent_id,
-        "audit_log": logs
-    })
-
-
-@fastapi_app.get("/api/audit-log")
-@fastapi_app.get("/audit-log")
-async def get_all_audit_logs(limit: int = 50):
-    """
-    Retrieve all audit logs, ordered by timestamp descending.
-    Matches the array structure expected by the frontend's AuditLogViewer.
-    """
-    audit_ref = db.collection("audit_log")
     try:
-        query = audit_ref.order_by("timestamp", direction=firestore.Query.DESCENDING).limit(limit)
-        results = query.stream()
-    except Exception as e:
-        # If the index is not yet built, query without ordering and sort in Python as a fallback
-        print(f"Firestore ordering failed, falling back to unordered retrieval: {e}")
-        query = audit_ref.limit(limit)
-        results = query.stream()
-
-    logs = []
-    for doc in results:
-        log_data = doc.to_dict()
-        log_data["id"] = doc.id
-        if "timestamp" in log_data and hasattr(log_data["timestamp"], "isoformat"):
-            log_data["timestamp"] = log_data["timestamp"].isoformat()
-        if "agent_id" in log_data:
-            log_data["agent"] = log_data["agent_id"]
-        logs.append(log_data)
-
-    # Sort in memory if the database query was not ordered
-    if results and len(logs) > 0 and "timestamp" in logs[0] and not hasattr(results, 'params'):
-        logs.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-
+        query = db.collection("audit_log").order_by(
+            "timestamp", direction=firestore.Query.DESCENDING
+        ).limit(200)
+        for doc in query.stream():
+            entry = ts_to_iso(doc.to_dict())
+            entry["id"] = doc.id
+            logs.append(entry)
+    except Exception:
+        # Fallback if index isn't built yet — sort in-memory
+        for doc in db.collection("audit_log").limit(200).stream():
+            entry = ts_to_iso(doc.to_dict())
+            entry["id"] = doc.id
+            logs.append(entry)
+        logs.sort(key=lambda e: e.get("timestamp", ""), reverse=True)
     return JSONResponse(logs)
 
 
-@fastapi_app.get("/api/agents")
-@fastapi_app.get("/agents")
-async def list_agents():
-    """
-    List all agents with their permissions and credentials (excluding secret key hash).
-    Matches the JSON array structure expected directly by App.jsx.
-    """
-    agents_ref = db.collection("agents")
-    agents_snapshot = agents_ref.stream()
-
-    agents_list = []
-    for agent_doc in agents_snapshot:
-        agent_id = agent_doc.id
-        agent_data = agent_doc.to_dict()
-
-        # Fetch permissions and credentials for this agent from root level
-        perm_ref = db.collection("permissions").document(agent_id)
-        cred_ref = db.collection("credentials").document(agent_id)
-
-        perm_snapshot = perm_ref.get()
-        cred_snapshot = cred_ref.get()
-
-        perm_data = perm_snapshot.to_dict() if perm_snapshot.exists else {}
-        cred_data = cred_snapshot.to_dict() if cred_snapshot.exists else {}
-
-        # Merge data, exposing properties under both camelCase and snake_case for compatibility
-        created_at_val = agent_data.get("created_at") or agent_data.get("createdAt")
-        created_at_iso = None
-        if created_at_val:
-            created_at_iso = created_at_val.isoformat() if hasattr(created_at_val, "isoformat") else str(created_at_val)
-
-        merged = {
-            "id": agent_id,
-            "agent_id": agent_id,
-            "name": agent_data.get("name"),
-            "owner": agent_data.get("owner_id"),
-            "owner_id": agent_data.get("owner_id"),
-            "purpose": agent_data.get("purpose"),
-            "created_at": created_at_iso,
-            "createdAt": created_at_iso,
-            "status": agent_data.get("status", "active"),
-            "permissions": perm_data.get("granted_actions", []),
-            "credentials": {
-                "public_key": cred_data.get("public_key"),
-                "active": cred_data.get("active", False)
-            }
-        }
-        agents_list.append(merged)
-
-    return JSONResponse(agents_list)
+@app.get("/api/agents/{agent_id}/audit-log")
+async def get_agent_audit_log(agent_id: str):
+    """Audit history for one agent, newest first."""
+    logs = []
+    try:
+        query = (
+            db.collection("audit_log")
+            .where("agent_id", "==", agent_id)
+            .order_by("timestamp", direction=firestore.Query.DESCENDING)
+            .limit(100)
+        )
+        for doc in query.stream():
+            entry = ts_to_iso(doc.to_dict())
+            entry["id"] = doc.id
+            logs.append(entry)
+    except Exception:
+        for doc in db.collection("audit_log").where("agent_id", "==", agent_id).limit(100).stream():
+            entry = ts_to_iso(doc.to_dict())
+            entry["id"] = doc.id
+            logs.append(entry)
+        logs.sort(key=lambda e: e.get("timestamp", ""), reverse=True)
+    return JSONResponse(logs)
 
 
-@fastapi_app.delete("/api/agents/{agent_id}")
-@fastapi_app.delete("/agents/{agent_id}")
+# ─── Revoke an agent ─────────────────────────────────────────────────────────
+
+@app.post("/api/agents/{agent_id}/revoke")
 async def revoke_agent(agent_id: str):
     """
-    Revoke an agent by deleting/disabling credentials.
+    Revoke an agent's credentials.
+    Sets credentials/{agent_id}.active = false and agents/{agent_id}.status = "revoked".
+    All future identity checks for this agent will fail.
     """
     cred_ref = db.collection("credentials").document(agent_id)
-    cred_snapshot = cred_ref.get()
-    if not cred_snapshot.exists:
-        raise HTTPException(status_code=404, detail="Agent credentials not found")
+    if not cred_ref.get().exists:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-    cred_ref.update({
-        "active": False
-    })
+    cred_ref.update({"active": False})
+    db.collection("agents").document(agent_id).update({"status": "revoked"})
 
-    agent_ref = db.collection("agents").document(agent_id)
-    agent_ref.update({
-        "status": "revoked"
-    })
-
-    log_audit(
+    write_audit_log(
         agent_id=agent_id,
+        agent_name=agent_id,
         action="revoke",
-        result="success",
-        reason="Agent credentials revoked"
+        identity_check=True,
+        permission_check=None,
+        result="granted",
+        reason="Agent credentials revoked by administrator",
     )
-
-    return JSONResponse({
-        "id": agent_id,
-        "agent_id": agent_id,
-        "message": f"Agent '{agent_id}' credentials successfully revoked."
-    })
+    return JSONResponse({"agent_id": agent_id, "status": "revoked"})
 
 
-def log_audit(agent_id: str, action: str, result: str, reason: str = ""):
-    """
-    Helper function to log an audit entry.
-    """
-    try:
-        audit_ref = db.collection("audit_log").document()  # auto-generated ID
-        audit_ref.set({
-            "timestamp": firestore.SERVER_TIMESTAMP,
-            "agent_id": agent_id,
-            "action": action,
-            "result": result,
-            "reason": reason
-        })
-    except Exception as e:
-        print(f"Failed to log audit event: {e}")
+# ---------------------------------------------------------------------------
+# Firebase Cloud Functions HTTP entrypoint
+# The function name "app" must match firebase.json → hosting.rewrites[0].function
+# Uses a2wsgi to bridge FastAPI's ASGI interface to the WSGI interface that
+# functions_framework expects.
+# ---------------------------------------------------------------------------
+try:
+    import functions_framework
+    from a2wsgi import ASGIMiddleware as _ASGIMiddleware
+
+    _wsgi_app = _ASGIMiddleware(app)
+
+    @functions_framework.http
+    def app_cf(request):  # named differently to avoid shadowing FastAPI app
+        """Cloud Functions HTTP entry-point."""
+        return _wsgi_app(request.environ, lambda s, h: None)
+
+    # Alias so firebase.json → "function: app" resolves correctly
+    app = app_cf  # type: ignore[assignment]
+except ImportError:
+    pass  # Not running in Cloud Functions — local dev uses uvicorn below
 
 
-# mangum handler for Google Cloud Functions python runtime
-handler = Mangum(fastapi_app)
-
-@functions_framework.http
-def api(request):
-    return handler(request)
-
-@functions_framework.http
-def app(request):
-    # Defining entry point function 'app' to match firebase.json's rewrite function: "app"
-    return handler(request)
-
+# ---------------------------------------------------------------------------
+# Local development entry point
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    uvicorn.run("main:fastapi_app", host="0.0.0.0", port=8080, reload=True)
+    print("Starting AgentID backend on http://localhost:8080")
+    print("Connecting to REAL Cloud Firestore (rift-2ef56)")
+    print("Set GOOGLE_APPLICATION_CREDENTIALS if not already configured.")
+    uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=True)

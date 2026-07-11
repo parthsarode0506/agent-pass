@@ -14,5 +14,7 @@ build/
 *.log
 .DS_Store
 Thumbs.db
-functions/venv/
-firestore-debug.log
+venv/
+.venv/
+node_modules/
+dist/

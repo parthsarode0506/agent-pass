@@ -1,427 +1,1051 @@
-/* Retro Windows XP/2000 Theme */
+/* ═══════════════════════════════════════════════════════════════════
+   AgentID — Y2K Edition ("AI's First Day Online")
+   Aesthetic: Translucent Glass, Glossy Candy, Chrome Text, Iridescence
+   ═══════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
 :root {
-  --bg-color: #ECE9D8;
-  --title-bar-bg: #0A246A;
-  --title-bar-text: #FFFFFF;
-  --border-color: #FFFFFF;
-  --border-dark: #C0C0C0;
-  --button-face: #F0F0F0;
-  --button-shadow: #808080;
-  --button-highlight: #FFFFFF;
-  --button-shadow-dark: #C0C0C0;
-  --panel-bg: #F0F0F0;
-  --panel-title-bg: #0A246A;
-  --panel-title-text: #FFFFFF;
-  --font-family: Tahoma, Verdana, sans-serif;
-  --font-size: 12px;
+  /* Glossy glass panel */
+  --y2k-panel-gradient: linear-gradient(135deg, rgba(10, 95, 201, 0.45) 0%, rgba(47, 157, 232, 0.4) 35%, rgba(95, 208, 232, 0.35) 65%, rgba(126, 232, 216, 0.3) 100%);
+  --y2k-panel-border: rgba(255, 255, 255, 0.55);
+  --y2k-panel-radius: 20px;
+  --y2k-glass-overlay: linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.05) 40%, rgba(255, 255, 255, 0) 60%);
+
+  /* Chrome/metallic text */
+  --chrome-text-gradient: linear-gradient(180deg, #ffffff 0%, #cfd9e8 30%, #7f97b8 55%, #ffffff 80%, #a9bdd6 100%);
+
+  /* Glossy candy buttons */
+  --btn-blue-gradient: radial-gradient(120% 140% at 30% 0%, #bfe9ff 0%, #4bb8ff 35%, #0a7fe0 70%, #0a5fc9 100%);
+  --btn-purple-gradient: radial-gradient(120% 140% at 30% 0%, #f0c9ff 0%, #c86bf0 35%, #8b1fc9 70%, #5f0f96 100%);
+  --btn-highlight: rgba(255, 255, 255, 0.9);
+
+  /* Status colors */
+  --status-granted: #22e07a;
+  --status-denied: #ff3d5e;
+  --status-idle: #b8c4d6;
+
+  /* Iridescent accents */
+  --iridescent-gradient: linear-gradient(120deg, #ff9ad5, #a0e7ff, #c8ffb0, #ffe28a, #ff9ad5);
+
+  /* Fonts */
+  --font-chrome: "Arial Rounded MT Bold", "Comic Sans MS", "Verdana", sans-serif;
+  --font-ui: "Verdana", "Tahoma", sans-serif;
+  --font-mono: "Share Tech Mono", monospace;
 }
 
-* {
+/* ─── Reset & Base ───────────────────────────────────────────────── */
+*, *::before, *::after {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  margin: 0;
-  font-family: var(--font-family);
-  font-size: var(--font-size);
-  background-color: var(--bg-color);
-  color: #000000;
-}
-
-.app {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-}
-
-.header {
-  background-color: var(--title-bar-bg);
-  color: var(--title-bar-text);
-  padding: 8px;
-  font-weight: bold;
-  border-bottom: 2px solid var(--border-dark);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.panels {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-  gap: 8px;
-  padding: 8px;
-}
-
-.panel {
-  background-color: var(--panel-bg);
-  border: 2px solid var(--border-dark);
-  display: flex;
-  flex-direction: column;
-}
-
-.panel-title {
-  background-color: var(--panel-title-bg);
-  color: var(--panel-title-text);
-  padding: 4px 8px;
-  font-weight: bold;
-  border-bottom: 2px solid var(--border-dark);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.panel-content {
-  flex: 1;
-  overflow: auto;
-  padding: 8px;
-}
-
-/* Button styles - Windows XP classic */
-.button {
-  background-color: var(--button-face);
-  border: 2px solid var(--button-face);
-  border-top-color: var(--button-highlight);
-  border-left-color: var(--button-highlight);
-  border-bottom-color: var(--button-shadow-dark);
-  border-right-color: var(--button-shadow-dark);
-  color: #000000;
-  font-family: var(--font-family);
-  font-size: var(--font-size);
-  padding: 2px 8px;
-  cursor: pointer;
-  min-width: 60px;
-}
-
-.button:hover {
-  background-color: var(--button-shadow);
-  color: #FFFFFF;
-}
-
-.button:active {
-  background-color: var(--button-shadow);
-  border-top-color: var(--button-shadow-dark);
-  border-left-color: var(--button-shadow-dark);
-  border-bottom-color: var(--button-highlight);
-  border-right-color: var(--button-highlight);
-}
-
-/* Toolbar */
-.toolbar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
-  padding: 4px;
-  border-bottom: 1px solid var(--border-dark);
-}
-
-.toolbar-button {
-  /* Inherits from .button */
-}
-
-/* Agent Registry Styles */
-.agent-registry {
-  width: 100%;
-}
-
-.agent-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 8px;
-}
-
-.agent-table th,
-.agent-table td {
-  border: 1px solid var(--border-dark);
-  padding: 4px 6px;
-  text-align: left;
-}
-
-.agent-table th {
-  background-color: var(--panel-title-bg);
-  color: var(--panel-title-text);
-}
-
-.agent-table tr:nth-child(even) {
-  background-color: var(--bg-color);
-}
-
-.permission-tag {
-  display: inline-block;
-  background-color: var(--button-face);
-  border: 1px solid var(--border-dark);
-  padding: 1px 4px;
-  margin: 1px;
-  font-size: 11px;
-}
-
-.permission-tag.none {
-  font-style: italic;
-  color: #808080;
-}
-
-.agent-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.action-button {
-  min-width: 80px;
-}
-
-/* View Details Dialog Styles */
-.dialog-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.dialog-backdrop.visible {
-  display: flex;
-}
-
-.dialog-backdrop:not(.visible) {
-  display: none;
-}
-
-.dialog-content {
-  background-color: var(--panel-bg);
-  border: 2px solid var(--border-dark);
-  width: 400px;
-  max-width: 90%;
-  max-height: 80%;
-  overflow: auto;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  /* Deep blue-teal gradient with soft blurred light-streak overlays */
+  background: radial-gradient(circle at 10% 20%, rgb(4, 21, 51) 0%, rgb(10, 80, 120) 45%, rgb(4, 40, 70) 90%);
+  color: #ffffff;
+  min-height: 100vh;
+  overflow-x: hidden;
   position: relative;
 }
 
-.dialog-header {
-  background-color: var(--panel-title-bg);
-  color: var(--panel-title-text);
-  padding: 4px 8px;
-  border-bottom: 2px solid var(--border-dark);
+/* Sparkle & Light Streak Overlays */
+body::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: 
+    radial-gradient(circle at 80% 20%, rgba(126, 232, 216, 0.15) 0%, transparent 40%),
+    radial-gradient(circle at 20% 70%, rgba(255, 154, 213, 0.1) 0%, transparent 35%);
+  z-index: -1;
+}
+
+/* Custom Cursor Placeholder style */
+html {
+  cursor: default;
+}
+
+/* ─── Y2K Glossy Glass Panels ────────────────────────────────────── */
+.y2k-panel {
+  background: var(--y2k-panel-gradient);
+  border: 1px solid var(--y2k-panel-border);
+  border-radius: var(--y2k-panel-radius);
+  backdrop-filter: blur(16px) saturate(120%);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+  box-shadow: 
+    inset 0 1px 0 rgba(255,255,255,0.4),
+    0 8px 32px 0 rgba(0, 5, 25, 0.4),
+    0 1px 2px 0 rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Glass glare highlight across top 50% */
+.y2k-panel::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: var(--y2k-glass-overlay);
+  pointer-events: none;
+  border-top-left-radius: var(--y2k-panel-radius);
+  border-top-right-radius: var(--y2k-panel-radius);
+  z-index: 1;
+}
+
+.y2k-panel-content {
+  position: relative;
+  z-index: 2;
+  padding: 20px;
+}
+
+/* ─── Chrome Metallic Typography ────────────────────────────────── */
+.chrome-text {
+  font-family: var(--font-chrome);
+  background: var(--chrome-text-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+  font-weight: bold;
+}
+
+/* ─── Glossy Candy Buttons ───────────────────────────────────────── */
+.y2k-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(255,255,255,0.7);
+  color: #ffffff;
+  font-family: var(--font-chrome);
+  font-weight: bold;
+  font-size: 11px;
+  padding: 8px 18px;
+  cursor: pointer;
+  outline: none;
+  transition: transform 0.1s ease, box-shadow 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 
+    0 4px 10px rgba(0,0,0,0.25),
+    inset 0 -3px 0 rgba(0,0,0,0.2);
+}
+
+.y2k-btn::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 15%;
+  width: 70%;
+  height: 35%;
+  background: var(--btn-highlight);
+  border-radius: 50% / 100%;
+  filter: blur(1px);
+  opacity: 0.6;
+}
+
+.y2k-btn-blue {
+  background: var(--btn-blue-gradient);
+}
+.y2k-btn-blue:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 0 12px rgba(75, 184, 255, 0.6), 0 4px 10px rgba(0,0,0,0.25);
+}
+
+.y2k-btn-purple {
+  background: var(--btn-purple-gradient);
+}
+.y2k-btn-purple:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 0 12px rgba(200, 107, 240, 0.6), 0 4px 10px rgba(0,0,0,0.25);
+}
+
+.y2k-btn:active {
+  transform: scale(0.95);
+  box-shadow: 
+    0 2px 4px rgba(0,0,0,0.2),
+    inset 0 1px 3px rgba(0,0,0,0.4);
+}
+
+.y2k-btn:disabled {
+  background: #505d6e;
+  border-color: rgba(255,255,255,0.3);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.y2k-btn:disabled::before {
+  display: none;
+}
+
+/* ─── Y2K Layout & SPA Structure ────────────────────────────────── */
+.app-container {
+  display: flex;
+  gap: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 0;
+  align-items: flex-start;
+}
+
+.main-display {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ─── AIM BUDDY LIST (Y2K Edition) ──────────────────────────────── */
+.aim-buddy-window {
+  width: 280px;
+  flex-shrink: 0;
+}
+
+.aim-titlebar {
+  background: linear-gradient(90deg, #1d8cf8 0%, #3358f4 100%);
+  padding: 8px 12px;
+  border-top-left-radius: var(--y2k-panel-radius);
+  border-top-right-radius: var(--y2k-panel-radius);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+}
+
+.aim-logo-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aim-logo-man {
+  font-size: 16px;
+  animation: float 2s ease-in-out infinite alternate;
+}
+
+@keyframes float {
+  from { transform: translateY(0); }
+  to { transform: translateY(-3px); }
+}
+
+.aim-search {
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.aim-search-input {
+  width: 100%;
+  padding: 6px 12px;
+  font-size: 11px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  outline: none;
+}
+
+.aim-search-input::placeholder {
+  color: #c0cddf;
+}
+
+.aim-buddy-list {
+  height: 480px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.aim-group-header {
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #7ee8d8;
+  padding: 6px 4px;
+}
+
+.aim-buddy-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 12px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.aim-buddy-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.aim-buddy-item.active-buddy {
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px 3px rgba(255,255,255,0.2);
+}
+
+.aim-status-orb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+  position: relative;
+}
+
+.aim-status-orb.online {
+  background: var(--status-granted);
+  box-shadow: 0 0 12px var(--status-granted);
+  animation: pulse-orb 1.5s infinite;
+}
+
+.aim-status-orb.offline {
+  background: var(--status-idle);
+  box-shadow: none;
+}
+
+@keyframes pulse-orb {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.85; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.aim-buddy-name {
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.aim-buddy-away-msg {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 170px;
+  margin-top: 2px;
+}
+
+.aim-pill-badge {
+  background: rgba(255, 255, 255, 0.16);
+  font-size: 8px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  display: inline-block;
+  margin-right: 2px;
+  margin-top: 2px;
+  font-weight: bold;
+}
+.aim-pill-badge.read {
+  border: 1px solid rgba(51, 144, 255, 0.65);
+  color: #a0e7ff;
+}
+.aim-pill-badge.payment {
+  border: 1px solid rgba(255, 61, 94, 0.65);
+  color: #ff9ad5;
+}
+.aim-pill-badge.write {
+  border: 1px solid rgba(34, 224, 122, 0.65);
+  color: #c8ffb0;
+}
+
+.aim-footer {
+  padding: 10px 12px;
+  display: flex;
+  gap: 8px;
+  border-top: 1px solid rgba(255,255,255,0.15);
+}
+
+.aim-footer-btn {
+  flex: 1;
+}
+
+/* ─── Y2K Tab System (Norton & ZoneAlarm panel switcher) ────────── */
+.y2k-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 10px 10px 0 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-top-left-radius: var(--y2k-panel-radius);
+  border-top-right-radius: var(--y2k-panel-radius);
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+.y2k-tab {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-bottom: none;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+  padding: 8px 16px;
+  color: #b8c4d6;
+  font-family: var(--font-chrome);
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.y2k-tab:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.y2k-tab.active {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #7ee8d8;
+  padding-bottom: 10px;
+  margin-bottom: -1px;
+}
+
+/* ─── ZONEALARM FIREWALL ALERT POPUP ────────────────────────────── */
+.firewall-alert-dialog {
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 15px 50px rgba(0,0,0,0.6);
+}
+
+.firewall-alert-bar {
+  background: linear-gradient(90deg, #CC0000 0%, #FF3D5E 100%);
+  padding: 12px;
+  border-top-left-radius: var(--y2k-panel-radius);
+  border-top-right-radius: var(--y2k-panel-radius);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  border-bottom: 1px solid rgba(255,255,255,0.3);
 }
 
-.dialog-close {
-  background: transparent;
-  border: none;
-  color: var(--panel-title-text);
-  font-size: 18px;
+.firewall-alert-body {
+  padding: 20px;
+}
+
+.firewall-alert-header {
+  display: flex;
+  gap: 16px;
+  background: rgba(255, 61, 94, 0.15);
+  border: 1.5px dashed var(--status-denied);
+  padding: 16px;
+  border-radius: 14px;
+  margin-bottom: 16px;
+  align-items: center;
+}
+
+.firewall-alert-shield {
+  font-size: 40px;
+  animation: pulse-shield 1s infinite alternate;
+}
+
+@keyframes pulse-shield {
+  from { transform: scale(1); filter: drop-shadow(0 0 2px var(--status-denied)); }
+  to { transform: scale(1.15); filter: drop-shadow(0 0 12px var(--status-denied)); }
+}
+
+.firewall-alert-title {
+  color: var(--status-denied);
+  font-family: var(--font-chrome);
+  font-size: 15px;
+  font-weight: bold;
+}
+
+.firewall-alert-description {
+  font-size: 12px;
+  margin-top: 4px;
+  color: #adc8e0;
+}
+
+.firewall-steps-box {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 14px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+
+.firewall-step-line {
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.firewall-step-label {
+  color: #c0cddf;
+}
+
+.firewall-step-status {
+  font-weight: bold;
+}
+
+.firewall-step-status.pass { color: var(--status-granted); }
+.firewall-step-status.fail { color: var(--status-denied); }
+.firewall-step-status.skipped { color: var(--status-idle); opacity: 0.6; }
+.firewall-step-status.checking { color: #ffe28a; animation: blink-text 0.8s infinite; }
+
+@keyframes blink-text {
+  50% { opacity: 0.3; }
+}
+
+.firewall-banner {
+  padding: 12px;
+  text-align: center;
+  font-family: var(--font-chrome);
+  font-size: 20px;
+  font-weight: bold;
+  letter-spacing: 3px;
+  border-radius: 12px;
+  border: 2px solid;
+  margin-bottom: 16px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  animation: slide-in-banner 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes slide-in-banner {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.firewall-banner.allow {
+  background: rgba(34, 224, 122, 0.15);
+  color: var(--status-granted);
+  border-color: var(--status-granted);
+  box-shadow: 0 0 15px rgba(34, 224, 122, 0.2);
+}
+
+.firewall-banner.block {
+  background: rgba(255, 61, 94, 0.15);
+  color: var(--status-denied);
+  border-color: var(--status-denied);
+  box-shadow: 0 0 15px rgba(255, 61, 94, 0.2);
+}
+
+.firewall-risk-area {
+  background: rgba(255, 226, 138, 0.12);
+  border: 1px solid rgba(255, 226, 138, 0.3);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 11px;
+  color: #ffe28a;
+  margin-bottom: 16px;
+  line-height: 1.4;
+}
+
+/* Shake animation class triggered on BLOCK results */
+.shake-popup {
+  animation: shake 0.4s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+
+/* Confetti Sparkle effect wrapper */
+.sparkle-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 10;
+}
+
+/* ─── NORTON SCAN REPORT (Y2K Audit Log) ────────────────────────── */
+.norton-scan-tally {
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  padding: 16px;
+  display: flex;
+  justify-content: space-around;
+  text-align: center;
+}
+
+.norton-tally-item {
+  flex: 1;
+}
+
+.norton-tally-label {
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #adc8e0;
+}
+
+.norton-tally-num {
+  font-size: 24px;
+  font-weight: bold;
+  font-family: var(--font-mono);
+  margin-top: 4px;
+  text-shadow: 0 0 8px rgba(255,255,255,0.2);
+}
+
+.norton-table-wrap {
+  padding: 12px;
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+.norton-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.norton-table th {
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+  padding: 10px 8px;
+  font-weight: bold;
+  text-align: left;
+  color: #7ee8d8;
+}
+
+.norton-table td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 10px 8px;
+}
+
+.norton-indicator-box {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
+}
+
+.norton-indicator-box.allowed {
+  background: var(--status-granted);
+  box-shadow: 0 0 8px var(--status-granted);
+}
+
+.norton-indicator-box.blocked {
+  background: var(--status-denied);
+  box-shadow: 0 0 8px var(--status-denied);
+}
+
+/* ─── HOLOGRAPHIC TRUST SEAL (Certified Buddy) ─────────────────── */
+.certified-seal-box {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--iridescent-gradient);
+  border: 1px solid rgba(255,255,255,0.6);
+  border-radius: 16px;
+  padding: 16px;
+  color: #121f3c;
+  box-shadow: 
+    0 8px 24px rgba(255, 154, 213, 0.3),
+    inset 0 1px 0 rgba(255,255,255,0.6);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Iridescent shimmer sweep */
+.certified-seal-box::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0) 100%);
+  transform: skewX(-25deg);
+  animation: shine-sweep 3s infinite;
+}
+
+@keyframes shine-sweep {
+  0% { left: -100%; }
+  40% { left: 150%; }
+  100% { left: 150%; }
+}
+
+.certified-ribbon {
+  font-size: 40px;
+  animation: spin-gently 6s linear infinite;
+}
+
+@keyframes spin-gently {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(365deg); }
+}
+
+.certified-seal-title {
+  font-family: var(--font-chrome);
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.certified-seal-text {
+  font-size: 11px;
+  margin-top: 4px;
+  opacity: 0.85;
+  font-weight: 500;
+}
+
+/* ─── Y2K Fieldset & Form Inputs ────────────────────────────────── */
+.win-fieldset {
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.win-legend {
+  font-family: var(--font-chrome);
+  font-weight: bold;
+  padding: 0 8px;
+  color: #7ee8d8;
+}
+
+.win-field-group {
+  margin-bottom: 12px;
+}
+
+.win-label {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 4px;
+  color: #adc8e0;
+  font-size: 11px;
+}
+
+.win-input,
+.win-select,
+.win-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(255,255,255,0.2);
+  background: rgba(0, 0, 0, 0.45);
+  color: #ffffff;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.win-input:focus,
+.win-select:focus,
+.win-textarea:focus {
+  border-color: #5fd0e8;
+}
+
+.win-checkbox-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.win-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
-  width: 24px;
-  height: 24px;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.win-checkbox-label:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+/* ─── Real-time Marquee Ticker ───────────────────────────────────── */
+.y2k-marquee-ticker {
+  background: linear-gradient(90deg, rgba(10, 95, 201, 0.8) 0%, rgba(95, 208, 232, 0.8) 100%);
+  border-bottom: 1.5px solid rgba(255,255,255,0.3);
+  padding: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.marquee-content {
+  display: inline-block;
+  padding-left: 100%;
+  animation: marquee-anim 25s linear infinite;
+}
+
+@keyframes marquee-anim {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-100%, 0, 0); }
+}
+
+/* ─── Y2K Full-screen loading screen (Boot Sequence) ────────────── */
+.y2k-boot-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: radial-gradient(circle at center, #0c2d5e 0%, #030a1c 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.6s ease;
+}
+
+.boot-logo-wrap {
+  text-align: center;
+}
+
+.boot-logo {
+  font-size: 50px;
+  margin-bottom: 20px;
+  animation: scale-glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes scale-glow {
+  from { transform: scale(0.95); filter: drop-shadow(0 0 10px rgba(95, 208, 232, 0.5)); }
+  to { transform: scale(1.05); filter: drop-shadow(0 0 30px rgba(255, 154, 213, 0.7)); }
+}
+
+.boot-loader {
+  width: 140px;
+  height: 4px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 99px;
+  overflow: hidden;
+  position: relative;
+  margin: 15px auto;
+}
+
+.boot-loader-progress {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--iridescent-gradient);
+  animation: load-bar 2.8s ease-in-out forwards;
+}
+
+@keyframes load-bar {
+  0% { width: 0; }
+  100% { width: 100%; }
+}
+
+/* ─── Antivirus Takeover Screen (Intrusion Detected) ────────────── */
+.antivirus-takeover {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  background: #990000;
+  background-image: repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(0,0,0,0.15) 35px, rgba(0,0,0,0.15) 70px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: glitch-takeover 0.25s infinite alternate;
+}
+
+@keyframes glitch-takeover {
+  0% { transform: scale(1); filter: hue-rotate(0deg); }
+  100% { transform: scale(1.005); filter: hue-rotate(8deg); }
+}
+
+.takeover-panel {
+  max-width: 520px;
+  width: 90%;
+  background: #000;
+  border: 4px solid var(--status-denied);
+  border-radius: 20px;
+  box-shadow: 0 0 50px rgba(255,0,0,0.7);
+  padding: 30px;
+  text-align: center;
+}
+
+/* ─── Webring Badge 88x31 Snippet Box ───────────────────────────── */
+.webring-badge-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+
+.badge-image-88x31 {
+  width: 88px;
+  height: 31px;
+  background: var(--iridescent-gradient);
+  color: #121f3c;
+  font-family: var(--font-chrome);
+  font-size: 8px;
+  font-weight: bold;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-shadow: inset 0 1px 0 #fff, 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.badge-snippet-input {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  background: #000;
+  color: #7ee8d8;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 4px;
+  padding: 4px 6px;
+  width: 100%;
+}
+
+/* ─── Monospace displaying key pair ────────────────────────────── */
+.win-monospace-box {
+  background-color: rgba(0,0,0,0.6);
+  border: 1.5px solid rgba(255,255,255,0.25);
+  border-radius: 10px;
+  padding: 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #7ee8d8;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+/* ─── Footer Layout ────────────────────────────────────────────── */
+.y2k-footer {
+  text-align: center;
+  margin-top: 30px;
+  padding: 16px 0;
+  border-top: 1px solid rgba(255,255,255,0.15);
+  font-size: 11px;
+  color: #adc8e0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+.best-viewed-badge {
+  background: linear-gradient(135deg, #0a7fe0 0%, #5fd0e8 100%);
+  color: #000;
+  font-weight: bold;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid #fff;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+.hit-counter {
+  font-family: var(--font-mono);
+  background: #000000;
+  color: #39ff14;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid #404040;
+}
+
+/* Card Pack Flip Reveal Animation */
+.card-pack-reveal {
+  animation: cardFlipReveal 0.65s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  transform-origin: center;
+}
+
+@keyframes cardFlipReveal {
+  from {
+    transform: scale(0.65) rotateY(90deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotateY(0deg);
+    opacity: 1;
+  }
+}
+
+/* ─── Modal Overlay (AIM Buddy Info dialog backdrop) ────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 4, 15, 0.7);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.dialog-body {
-  padding: 12px;
-}
-
-.dialog-error {
-  color: #FF0000;
-  margin-bottom: 8px;
-}
-
-.form-group {
-  margin-bottom: 10px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 4px;
+/* ─── Windows-style Control Buttons (X, _, □) ───────────────────── */
+.win-btn-control {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1.5px solid rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.15);
+  color: #ffffff;
+  font-size: 10px;
   font-weight: bold;
-}
-
-.form-group input,
-.form-group select {
-  width: 100%;
-  padding: 4px;
-  border: 2px solid var(--border-dark);
-  background-color: var(button-face);
-  font-family: var(--font-family);
-  font-size: var(--font-size);
-}
-
-.form-actions {
+  cursor: pointer;
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 16px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border-dark);
-}
-
-.dialog-button {
-  min-width: 70px;
-}
-
-/* Live Demo Panel Styles */
-.live-demo-panel {
-  padding: 8px;
-}
-
-.live-demo-panel h2 {
-  margin-top: 0;
-}
-
-.demo-buttons {
-  margin-bottom: 12px;
-}
-
-.demo-button {
-  /* Inherits from .button */
-  margin-right: 8px;
-}
-
-.demo-results {
-  display: flex;
-  gap: 12px;
-}
-
-.demo-result-column {
-  flex: 1;
-  border: 2px solid var(--border-dark);
-  background-color: var(--panel-bg);
-  padding: 8px;
-}
-
-.demo-result-column h3 {
-  margin-top: 0;
-  margin-bottom: 8px;
-  color: var(--panel-title-text);
-  background-color: var(--panel-title-bg);
-  padding: 4px 8px;
-}
-
-.demo-steps {
-  margin-bottom: 12px;
-}
-
-.demo-step {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 4px;
-  font-size: 11px;
-}
-
-.step-status {
-  display: inline-block;
-  width: 60px;
-  text-align: center;
-  font-weight: bold;
-  color: #FFFFFF;
-  border: 1px solid var(--border-dark);
-}
-
-.demo-history {
-  margin-top: 12px;
-}
-
-.demo-history h4 {
-  margin-top: 0;
-  margin-bottom: 4px;
-  font-size: 11px;
-}
-
-.demo-history ul {
-  list-style-type: none;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+  flex-shrink: 0;
   padding: 0;
-  margin: 0;
-  max-height: 150px;
+  line-height: 1;
+}
+
+.win-btn-control:hover {
+  background: rgba(255, 61, 94, 0.7);
+  border-color: rgba(255, 61, 94, 0.9);
+}
+
+/* ─── Firewall Mini Session Log ──────────────────────────────────── */
+.firewall-mini-log {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 10px;
+  padding: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  max-height: 160px;
   overflow-y: auto;
 }
 
-.demo-history li {
-  padding: 2px 4px;
-  border-bottom: 1px solid var(--border-dark);
-  font-size: 11px;
+.firewall-mini-log-line {
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  line-height: 1.4;
 }
 
-/* Audit Log Viewer Styles */
-.audit-log-viewer {
-  padding: 8px;
+.firewall-mini-log-line:last-child {
+  border-bottom: none;
 }
 
-.audit-log-viewer h2 {
-  margin-top: 0;
+/* ─── Firewall Alert Action Button Row ───────────────────────────── */
+.firewall-action-btn-row {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 4px;
 }
 
-.toolbar {
-  margin-bottom: 8px;
+/* ─── Utility spacing ────────────────────────────────────────────── */
+.mt-4 {
+  margin-top: 16px;
 }
 
-.refresh-button {
-  /* Inherits from .button */
+/* ─── Y2K Agent Card hologram + stamp ───────────────────────────── */
+.y2k-agent-card {
+  cursor: default;
+  user-select: none;
 }
 
-.error-message {
-  color: #FF0000;
-  margin-bottom: 8px;
+.y2k-card-hologram {
+  transition: background-position 0.1s ease;
 }
 
-.audit-table-container {
-  flex: 1;
-  overflow: auto;
-  border: 2px solid var(--border-dark);
-}
-
-.audit-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.audit-table th,
-.audit-table td {
-  border: 1px solid var(--border-dark);
-  padding: 4px 6px;
-  text-align: left;
-  font-size: 11px;
-}
-
-.audit-table th {
-  background-color: var(--panel-title-bg);
-  color: var(--panel-title-text);
-  cursor: pointer;
-}
-
-.audit-table th:hover {
-  background-color: var(--button-shadow);
-}
-
-.audit-table tr:nth-child(even) {
-  background-color: var(--bg-color);
-}
-
-.result-indicator {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  margin-right: 4px;
-  border: 1px solid var(--border-dark);
-}
-
-.result-text {
-  font-size: 11px;
-}
-
-/* General styles for inputs and selects in forms */
-input, select, textarea {
-  font-family: var(--font-family);
-  font-size: var(--font-size);
-}
-
-/* Ensure no rounded corners anywhere */
-* {
-  border-radius: 0 !important;
+/* ─── Buddy dialog window (profile modal) ───────────────────────── */
+.buddy-info-dialog {
+  width: 480px;
+  max-width: 95vw;
 }

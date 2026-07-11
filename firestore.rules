@@ -2,6 +2,42 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // AGENTS — anyone can read (the Agent Registry page lists them directly),
+    // but writes are only allowed via the Cloud Function (Admin SDK bypasses these rules).
+    match /agents/{agentId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // CREDENTIALS — never client-readable or client-writable.
+    // Public keys and secret key hashes live here. If readable, anyone could
+    // impersonate an identity check result, defeating the point of AgentID.
+    match /credentials/{agentId} {
+      allow read, write: if false;
+    }
+
+    // PERMISSIONS — readable (so the UI can display what each agent can do),
+    // never client-writable. Only the Cloud Function grants permissions at registration time.
+    match /permissions/{agentId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // AUDIT LOG — readable (so the Audit Log page works),
+    // never client-writable. If a browser could write here it could fake
+    // a "granted" entry without ever passing a real check.
+    match /audit_log/{logId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // COUNTERS — internal sequence number tracking, never exposed to clients.
+    match /counters/{counterId} {
+      allow read, write: if false;
+    }
+
+    // Default deny for anything not explicitly listed.
     match /{document=**} {
       allow read, write: if false;
     }

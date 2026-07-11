@@ -1,146 +1,123 @@
 import os
+import hashlib
+from datetime import datetime, timezone
 import firebase_admin
 from firebase_admin import credentials, firestore
 import nacl.signing
 import nacl.encoding
-import bcrypt
-from datetime import datetime, timezone
+
+def generate_ed25519_keypair():
+    signing_key = nacl.signing.SigningKey.generate()
+    verify_key = signing_key.verify_key
+    public_key_hex = verify_key.encode(encoder=nacl.encoding.HexEncoder).decode('utf-8')
+    secret_key_hex = signing_key.encode(encoder=nacl.encoding.HexEncoder).decode('utf-8')
+    return public_key_hex, secret_key_hex
+
+def hash_secret_key(secret_key_hex: str) -> str:
+    return hashlib.sha256(secret_key_hex.encode('utf-8')).hexdigest()
 
 def main():
-    # Initialize Firebase app (uses GOOGLE_APPLICATION_CREDENTIALS or emulator if configured)
     project_id = "rift-2ef56"
     os.environ["GCLOUD_PROJECT"] = project_id
     
-    try:
-        app = firebase_admin.get_app()
-    except ValueError:
-        try:
-            # Eagerly check if default credentials can be resolved
-            import google.auth
-            google.auth.default()
-            firebase_admin.initialize_app()
-        except Exception:
-            # Generate a valid RSA private key dynamically to satisfy the PEM parser
-            from cryptography.hazmat.primitives.asymmetric import rsa
-            from cryptography.hazmat.primitives import serialization
-            private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-            private_key_pem = private_key.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption()
-            ).decode("utf-8")
+    # Resolve ADC path from Firebase CLI profile
+    appdata = os.environ.get("APPDATA", "")
+    adc_path = os.path.join(appdata, "firebase", "parthsarode05_gmail_com_application_default_credentials.json")
+    if os.path.exists(adc_path):
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = adc_path
 
-            # Fallback to dummy credentials for local emulator
-            dummy_cred = credentials.Certificate({
-                "type": "service_account",
-                "project_id": project_id,
-                "private_key_id": "dummy_key_id",
-                "private_key": private_key_pem,
-                "client_email": "dummy@example.com",
-                "token_uri": "https://oauth2.googleapis.com/token"
-            })
-            firebase_admin.initialize_app(dummy_cred)
-            print("Initialized Firebase using fallback emulator credentials.")
+    try:
+        firebase_admin.initialize_app()
+    except Exception as exc:
+        print(f"Failed to initialize Firebase Admin: {exc}")
+        return
 
     db = firestore.client()
 
-    # Seed default owner so registration API requests succeed
-    owner_id = "owner_demo"
-    owner_ref = db.collection("owners").document(owner_id)
-    if not owner_ref.get().exists:
-        owner_ref.set({
-            "name": "Demo Owner",
-            "created_at": datetime.now(timezone.utc)
-        })
-        print(f"Created default owner: {owner_id}")
-    else:
-        print(f"Owner '{owner_id}' already exists.")
-
     agents = [
         {
-            "id": "TravelAgent",
-            "owner_id": "owner_demo",
+            "id": "AGT-TRAVELAGENT-RAHUL-001",
             "name": "TravelAgent",
-            "purpose": "Manages travel bookings and calendar",
-            "requested_permissions": ["calendar:read", "calendar:write", "calendar:create_event"]
+            "owner": "Rahul",
+            "purpose": "Manages calendar operations and hotel searches",
+            "permissions": ["calendar:read", "calendar:write", "web:browse"],
+            "agent_type_slug": "TRAVELAGENT",
+            "owner_slug": "RAHUL",
+            "seq": 1
         },
         {
-            "id": "ShoppingAgent",
-            "owner_id": "owner_demo",
+            "id": "AGT-SHOPPINGAGENT-RAHUL-001",
             "name": "ShoppingAgent",
-            "purpose": "Handles online shopping and payments",
-            "requested_permissions": ["payments:read", "payments:make"]
+            "owner": "Rahul",
+            "purpose": "Handles secure purchases and online commerce transactions",
+            "permissions": ["payments:make", "booking:buy", "web:browse"],
+            "agent_type_slug": "SHOPPINGAGENT",
+            "owner_slug": "RAHUL",
+            "seq": 1
         },
         {
-            "id": "ResearchAgent",
-            "owner_id": "owner_demo",
+            "id": "AGT-RESEARCHAGENT-RAHUL-001",
             "name": "ResearchAgent",
-            "purpose": "Conducts research and reads data",
-            "requested_permissions": ["data:read"]
+            "owner": "Rahul",
+            "purpose": "Reads general data and index documents",
+            "permissions": ["data:read"],
+            "agent_type_slug": "RESEARCHAGENT",
+            "owner_slug": "RAHUL",
+            "seq": 1
         }
     ]
 
+    print(f"Connecting to live Firestore database ({project_id})...")
     created = []
 
     for agent_data in agents:
         agent_id = agent_data["id"]
         agent_ref = db.collection("agents").document(agent_id)
-        snap = agent_ref.get()
-        if snap.exists:
-            print(f"Agent '{agent_id}' already exists. Skipping creation.")
+        
+        if agent_ref.get().exists:
+            print(f"Agent '{agent_id}' already exists. Skipping.")
             continue
 
-        # Generate Ed25519 keypair
-        signing_key = nacl.signing.SigningKey.generate()  # private key
-        verify_key = signing_key.verify_key
-        public_key = verify_key.encode(encoder=nacl.encoding.HexEncoder).decode()
-        secret_key = signing_key.encode(encoder=nacl.encoding.HexEncoder).decode()
-
-        # Hash secret key with bcrypt
-        secret_hash = bcrypt.hashpw(secret_key.encode(), bcrypt.gensalt()).decode()
-
+        public_key_hex, secret_key_hex = generate_ed25519_keypair()
+        secret_key_hash = hash_secret_key(secret_key_hex)
         now = datetime.now(timezone.utc)
 
-        # Create agent document
+        # Write to agents/
         agent_ref.set({
-            "owner_id": agent_data["owner_id"],
             "name": agent_data["name"],
+            "owner": agent_data["owner"],
             "purpose": agent_data["purpose"],
-            "created_at": now,
-            "updated_at": now,
-            "status": "active"
+            "agent_type_slug": agent_data["agent_type_slug"],
+            "owner_slug": agent_data["owner_slug"],
+            "sequence_number": agent_data["seq"],
+            "status": "active",
+            "created_at": now
         })
 
-        # Create credentials document at root level (compatible with functions/main.py)
-        cred_ref = db.collection("credentials").document(agent_id)
-        cred_ref.set({
-            "public_key": public_key,
-            "secret_key_hash": secret_hash,
-            "secret_hash": secret_hash,
-            "active": True,
-            "created_at": now,
-            "issued_at": now
+        # Write to credentials/
+        db.collection("credentials").document(agent_id).set({
+            "public_key": public_key_hex,
+            "secret_key_hash": secret_key_hash,
+            "issued_at": now,
+            "active": True
         })
 
-        # Create permissions document at root level (compatible with functions/main.py)
-        perm_ref = db.collection("permissions").document(agent_id)
-        perm_ref.set({
-            "granted_actions": agent_data["requested_permissions"],
-            "updated_at": now
+        # Write to permissions/
+        db.collection("permissions").document(agent_id).set({
+            "granted_actions": agent_data["permissions"]
         })
 
-        created.append((agent_id, secret_key))
-        print(f"Created agent '{agent_id}' with public key {public_key}")
+        created.append((agent_id, secret_key_hex))
+        print(f"Seeded agent: {agent_id}")
 
-    # Output results
     if created:
-        print("\n=== Created Agents (save these secret keys securely) ===")
-        for agent_id, secret_key in created:
+        print("\n=== SEEDED ED25519 PRIVATE KEYS ===")
+        for agent_id, sec_key in created:
             print(f"Agent ID: {agent_id}")
-            print(f"Secret Key: {secret_key}")
+            print(f"Secret Key (Hex): {sec_key}")
             print("---")
     else:
-        print("\nNo new agents created (all already existed).")
+        print("\nAll seed agents already exist in database.")
 
 if __name__ == "__main__":
     main()
