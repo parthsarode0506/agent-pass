@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 def main():
     # Initialize Firebase app (uses GOOGLE_APPLICATION_CREDENTIALS or emulator if configured)
-    project_id = "agentid-hackathon"
+    project_id = "rift-2ef56"
     os.environ["GCLOUD_PROJECT"] = project_id
     
     try:

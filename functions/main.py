@@ -7,8 +7,9 @@ from typing import List, Optional, Dict, Any
 
 import firebase_admin
 from firebase_admin import credentials, firestore
-from fastapi import FastAPI, HTTPException, Request, Depends
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Depends
+from starlette.responses import JSONResponse
+from starlette.requests import Request
 import uvicorn
 import nacl.signing
 import nacl.encoding
@@ -19,7 +20,7 @@ from mangum import Mangum
 # Initialize Firebase Admin SDK
 # In Cloud Functions or emulator, the default credentials are used.
 if not firebase_admin._apps:
-    project_id = "agentid-hackathon"
+    project_id = "rift-2ef56"
     os.environ["GCLOUD_PROJECT"] = project_id
     try:
         # Eagerly check if default credentials can be resolved
