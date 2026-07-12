@@ -11,51 +11,56 @@ All Firestore reads/writes go straight to the live cloud database.
 
 import os
 import re
+import json
 import base64
 import hashlib
+import tempfile
+import pathlib
 from datetime import datetime, timezone
 
 import firebase_admin
 from firebase_admin import credentials, firestore
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 import nacl.signing
 import nacl.encoding
 import nacl.exceptions
 
-import json
-import tempfile
-
 # ---------------------------------------------------------------------------
 # Firebase Admin SDK initialisation
 #
-# Supports three credential modes (checked in order):
-#   1. GOOGLE_CREDENTIALS_JSON env var — full service account JSON as a string.
-#      Used on Render.com and other cloud hosts where you can't upload files.
-#   2. GOOGLE_APPLICATION_CREDENTIALS env var — path to a local key file.
-#      Used during local development via run-cloud.ps1.
-#   3. Default application credentials — used inside Cloud Functions / Cloud Run.
+# When GOOGLE_APPLICATION_CREDENTIALS is set, the SDK authenticates via
+# the service account key file and connects to real Cloud Firestore.
+# When running on Cloud Functions the runtime injects credentials automatically.
 #
-# IMPORTANT: Never set FIRESTORE_EMULATOR_HOST — always talk to real Cloud Firestore.
+# IMPORTANT: Do NOT set FIRESTORE_EMULATOR_HOST — we always talk to the
+# live database so data appears instantly in the Firebase Console.
 # ---------------------------------------------------------------------------
 if not firebase_admin._apps:
     project_id = "rift-2ef56"
     os.environ["GCLOUD_PROJECT"] = project_id
 
-    cred_json_str = os.environ.get("GOOGLE_CREDENTIALS_JSON")
-    if cred_json_str:
-        # Render.com / env-var credentials: write JSON to a temp file then load it
-        cred_dict = json.loads(cred_json_str)
-        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
-        json.dump(cred_dict, tmp)
-        tmp.flush()
-        cred = credentials.Certificate(tmp.name)
-        firebase_admin.initialize_app(cred, {"projectId": project_id})
+    _b64 = os.environ.get("FIREBASE_CREDENTIALS_B64", "")
+    if _b64:
+        # Render / cloud deployment: credentials stored as base64-encoded JSON env var
+        _cred_json = json.loads(base64.b64decode(_b64).decode("utf-8"))
+        # Write to a temp file so firebase-admin can read it
+        _tmp = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        )
+        json.dump(_cred_json, _tmp)
+        _tmp.flush()
+        _tmp.close()
+        _cred = credentials.Certificate(_tmp.name)
+        firebase_admin.initialize_app(_cred, {"projectId": project_id})
+        print(f"[init] Loaded credentials from FIREBASE_CREDENTIALS_B64 env var.")
     else:
-        # Local dev (GOOGLE_APPLICATION_CREDENTIALS) or Cloud Functions (ADC)
+        # Local dev: use GOOGLE_APPLICATION_CREDENTIALS file path
         firebase_admin.initialize_app(options={"projectId": project_id})
+        print("[init] Using GOOGLE_APPLICATION_CREDENTIALS (local dev).")
 
 db = firestore.client()
 
@@ -578,26 +583,26 @@ async def revoke_agent(agent_id: str):
 
 
 # ---------------------------------------------------------------------------
-# Firebase Cloud Functions HTTP entrypoint
-# The function name "app" must match firebase.json → hosting.rewrites[0].function
-# Uses a2wsgi to bridge FastAPI's ASGI interface to the WSGI interface that
-# functions_framework expects.
+# Serve React frontend (production — Render monorepo deploy)
 # ---------------------------------------------------------------------------
-try:
-    import functions_framework
-    from a2wsgi import ASGIMiddleware as _ASGIMiddleware
+# The frontend/dist folder is built by the Render build command before uvicorn starts.
+# All /api/* routes defined above take priority; everything else falls through to index.html.
 
-    _wsgi_app = _ASGIMiddleware(app)
+_DIST = pathlib.Path(__file__).parent.parent / "frontend" / "dist"
 
-    @functions_framework.http
-    def app_cf(request):  # named differently to avoid shadowing FastAPI app
-        """Cloud Functions HTTP entry-point."""
-        return _wsgi_app(request.environ, lambda s, h: None)
+if _DIST.exists():
+    # Serve hashed JS/CSS assets with long-lived cache
+    app.mount("/assets", StaticFiles(directory=_DIST / "assets"), name="static-assets")
 
-    # Alias so firebase.json → "function: app" resolves correctly
-    app = app_cf  # type: ignore[assignment]
-except ImportError:
-    pass  # Not running in Cloud Functions — local dev uses uvicorn below
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        """SPA catch-all — serves index.html for every non-API path."""
+        index = _DIST / "index.html"
+        return FileResponse(str(index))
+else:
+    @app.get("/", include_in_schema=False)
+    async def root():
+        return {"message": "AgentID API is running. Frontend dist not found."}
 
 
 # ---------------------------------------------------------------------------
@@ -605,6 +610,6 @@ except ImportError:
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     print("Starting AgentID backend on http://localhost:8080")
-    print("Connecting to REAL Cloud Firestore (rift-2ef56)")
+    print("Connecting to REAL Cloud Firestore (agentid-hackathon)")
     print("Set GOOGLE_APPLICATION_CREDENTIALS if not already configured.")
     uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=True)

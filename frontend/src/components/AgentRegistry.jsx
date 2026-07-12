@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { apiUrl } from '../utils/api.js';
+import { api } from '../utils/api.js';
 
 export default function AgentRegistry({
   agents, selectedAgentId, onSelectBuddy, onOpenDetails,
@@ -24,7 +24,7 @@ export default function AgentRegistry({
     if (!window.confirm(`Are you sure you want to remove and permanently revoke buddy "${agent.name}"?`)) return;
     setRevoking(agent.id);
     try {
-      await fetch(apiUrl(`/api/agents/${agent.id}/revoke`), { method: 'POST' });
+      await api.post(`/api/agents/${agent.id}/revoke`, {});
       onRevoke();
     } catch (err) {
       console.error('Revoke failed', err);

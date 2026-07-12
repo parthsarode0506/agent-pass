@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { playAlert, playChime, playBuzz, playSiren } from '../utils/audio.js';
-import { apiUrl } from '../utils/api.js';
+import { api } from '../utils/api.js';
 
 const PRESET_ACTIONS = [
   'web:browse', 'booking:buy', 'calendar:write', 'email:read',
@@ -38,11 +38,7 @@ function FirewallAlertPopup({ agentId, agentName, action, isQuickDemo, onClose, 
       
       let data;
       try {
-        const res = await fetch(apiUrl(`/api/agents/${agentId}/attempt-action`), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action }),
-        });
+        const res = await api.post(`/api/agents/${agentId}/attempt-action`, { action });
         data = await res.json();
       } catch {
         if (!cancelled) {

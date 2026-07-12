@@ -3,7 +3,7 @@ import './styles.css';
 import { app } from './firebase';
 import { getFirestore, collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { playStartup, setMuted, getMuted } from './utils/audio.js';
-import { apiUrl } from './utils/api.js';
+import { api } from './utils/api.js';
 
 // ─── Retro Components ─────────────────────────────────────────────
 import AgentRegistry    from './components/AgentRegistry';
@@ -37,7 +37,7 @@ export default function App() {
   const fetchAgents = useCallback(async () => {
     setLoading(true);
     try {
-      const res  = await fetch(apiUrl('/api/agents'));
+      const res  = await api.get('/api/agents');
       const data = await res.json();
       setAgents(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -214,6 +214,16 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      {/* ── Footer ── */}
+      <footer className="y2k-footer">
+        <div>AgentID v2006.1 · All rights reserved</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span>HIT COUNTER:</span>
+          <span className="hit-counter">{String(logs.length).padStart(6, '0')}</span>
+        </div>
+
+      </footer>
 
       {/* ── AIM Buddy Profile Modal ── */}
       {detailAgent && (

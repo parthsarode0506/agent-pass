@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import VirtualAgentCard from './VirtualAgentCard';
 import { playDialUp } from '../utils/audio.js';
-import { apiUrl } from '../utils/api.js';
+import { api } from '../utils/api.js';
 
 const ALL_PERMISSIONS = [
   { id: 'web:browse',     label: 'Web: Browse the Internet' },
@@ -29,11 +29,7 @@ function RegistrationForm({ onRegistered, onBack }) {
     if (!nlText.trim()) return;
     setParsing(true);
     try {
-      const res  = await fetch(apiUrl('/api/agents/parse-permissions'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: nlText }),
-      });
+      const res  = await api.post('/api/agents/parse-permissions', { text: nlText });
       const data = await res.json();
       if (data.permissions) setPermissions(data.permissions);
     } catch (_) {}
@@ -49,15 +45,11 @@ function RegistrationForm({ onRegistered, onBack }) {
     setError('');
     setLoading(true);
     try {
-      const res  = await fetch(apiUrl('/api/agents/register'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name.trim(),
-          owner: form.owner.trim(),
-          purpose: form.purpose.trim(),
-          permissions,
-        }),
+      const res  = await api.post('/api/agents/register', {
+        name: form.name.trim(),
+        owner: form.owner.trim(),
+        purpose: form.purpose.trim(),
+        permissions,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Registration failed');

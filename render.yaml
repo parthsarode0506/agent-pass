@@ -1,15 +1,18 @@
 services:
   - type: web
     name: agentid-backend
-    runtime: python
+    env: python
     region: oregon
     plan: free
-    rootDir: functions
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /api/health
+    buildCommand: >
+      cd frontend && npm ci && npm run build && cd .. &&
+      pip install -r functions/requirements.txt
+    startCommand: cd functions && uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
+      - key: FIREBASE_CREDENTIALS_B64
+        sync: false
       - key: GCLOUD_PROJECT
         value: rift-2ef56
-      - key: GOOGLE_CREDENTIALS_JSON
-        sync: false   # You paste this value in the Render dashboard
+      - key: PYTHON_VERSION
+        value: "3.11"
+    autoDeploy: true

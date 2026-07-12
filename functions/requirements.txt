@@ -2,5 +2,4 @@ fastapi==0.110.*
 firebase-admin==6.*
 pynacl==1.5.*
 uvicorn[standard]
-functions-framework==3.*
-a2wsgi==1.*
+aiofiles>=23.0,<25.0
