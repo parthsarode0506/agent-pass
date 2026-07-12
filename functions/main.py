@@ -43,10 +43,21 @@ if not firebase_admin._apps:
     project_id = "rift-2ef56"
     os.environ["GCLOUD_PROJECT"] = project_id
 
-    _b64 = os.environ.get("FIREBASE_CREDENTIALS_B64", "")
+    _b64 = os.environ.get("FIREBASE_CREDENTIALS_B64", "").strip()
     if _b64:
         # Render / cloud deployment: credentials stored as base64-encoded JSON env var
-        _cred_json = json.loads(base64.b64decode(_b64).decode("utf-8"))
+        # Add padding if needed (some env var editors strip trailing '=')
+        _missing_pad = len(_b64) % 4
+        if _missing_pad:
+            _b64 += "=" * (4 - _missing_pad)
+        try:
+            _cred_json = json.loads(base64.b64decode(_b64).decode("utf-8"))
+        except Exception as _e:
+            raise RuntimeError(
+                f"FIREBASE_CREDENTIALS_B64 is invalid (len={len(_b64)}). "
+                f"Re-encode with: [Convert]::ToBase64String([IO.File]::ReadAllBytes('<path>')). "
+                f"Error: {_e}"
+            )
         # Write to a temp file so firebase-admin can read it
         _tmp = tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False
