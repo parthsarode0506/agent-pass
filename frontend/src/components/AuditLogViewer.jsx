@@ -112,11 +112,11 @@ export default function AuditLogViewer({ logs, stats, onRefresh }) {
                         transition: 'background 0.3s ease'
                       }}
                     >
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11, whiteSpace: 'nowrap', color: '#adc8e0' }}>
+                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11, whiteSpace: 'nowrap', color: '#ffffff', fontWeight: 'bold' }}>
                         {log.timestamp ? new Date(log.timestamp).toLocaleString() : '—'}
                       </td>
                       <td>
-                        <span style={{ fontFamily: 'var(--font-mono)', color: '#7ee8d8', fontSize: 11 }}>{log.agent_id}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', color: '#00ffff', fontSize: 11, fontWeight: 'bold' }}>{log.agent_id}</span>
                       </td>
                       <td style={{ fontWeight: 'bold', color: '#ffffff' }}>
                         {log.agent_name || '—'}
@@ -127,24 +127,24 @@ export default function AuditLogViewer({ logs, stats, onRefresh }) {
                         </span>
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        {log.identity_check === true  && <span style={{ color: 'var(--status-granted)', fontWeight: 'bold' }}>✓</span>}
-                        {log.identity_check === false && <span style={{ color: 'var(--status-denied)', fontWeight: 'bold' }}>✗</span>}
+                        {log.identity_check === true  && <span style={{ color: '#22e07a', fontWeight: 'bold', fontSize: 14 }}>✓</span>}
+                        {log.identity_check === false && <span style={{ color: '#ff3d5e', fontWeight: 'bold', fontSize: 14 }}>✗</span>}
                         {log.identity_check == null   && <span style={{ color: 'var(--status-idle)' }}>—</span>}
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        {log.permission_check === true  && <span style={{ color: 'var(--status-granted)', fontWeight: 'bold' }}>✓</span>}
-                        {log.permission_check === false && <span style={{ color: 'var(--status-denied)', fontWeight: 'bold' }}>✗</span>}
+                        {log.permission_check === true  && <span style={{ color: '#22e07a', fontWeight: 'bold', fontSize: 14 }}>✓</span>}
+                        {log.permission_check === false && <span style={{ color: '#ff3d5e', fontWeight: 'bold', fontSize: 14 }}>✗</span>}
                         {log.permission_check == null   && <span style={{ color: 'var(--status-idle)' }}>—</span>}
                       </td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center' }}>
                           <span className={`norton-indicator-box ${isAllow ? 'allowed' : 'blocked'}`} />
-                          <strong style={{ color: isAllow ? 'var(--status-granted)' : 'var(--status-denied)', fontSize: 11 }}>
+                          <strong style={{ color: isAllow ? 'var(--status-granted)' : 'var(--status-denied)', fontSize: 11, letterSpacing: '0.5px' }}>
                             {isAllow ? 'ALLOWED' : 'BLOCKED'}
                           </strong>
                         </div>
                       </td>
-                      <td style={{ fontSize: 11, fontStyle: 'italic', color: '#e0e8f0', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <td style={{ fontSize: 11, fontStyle: 'italic', color: '#ffffff', fontWeight: '500', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {log.risk_note || log.reason || '—'}
                       </td>
                     </tr>
