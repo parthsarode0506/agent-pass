@@ -240,6 +240,7 @@ async def register_agent(request: Request):
     permissions = [p for p in (data.get("permissions") or []) if isinstance(p, str)]
 
     # --- Verify Firebase Auth token and override owner with verified identity ---
+    user_uid = None
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         id_token = auth_header[7:]
@@ -247,7 +248,8 @@ async def register_agent(request: Request):
             decoded = firebase_auth.verify_id_token(id_token)
             # Override owner with the authenticated user's name or email
             owner = decoded.get("name") or decoded.get("email", owner)
-            print(f"[register] Verified Firebase Auth user: {owner} (uid={decoded['uid']})")
+            user_uid = decoded.get("uid")
+            print(f"[register] Verified Firebase Auth user: {owner} (uid={user_uid})")
         except Exception as exc:
             print(f"[register] Token verification failed: {exc}")
             raise HTTPException(status_code=401, detail="Invalid or expired authentication token")
@@ -285,7 +287,7 @@ async def register_agent(request: Request):
         tx.set(counter_ref, {"count": seq})
 
         # Write agents/{agent_id}
-        tx.set(agent_ref, {
+        agent_doc = {
             "name": name,
             "owner": owner,
             "purpose": purpose,
@@ -294,7 +296,11 @@ async def register_agent(request: Request):
             "sequence_number": seq,
             "status": "active",
             "created_at": now,
-        })
+        }
+        # Store owner_uid for per-user visibility filtering
+        if user_uid:
+            agent_doc["owner_uid"] = user_uid
+        tx.set(agent_ref, agent_doc)
 
         # Write credentials/{agent_id} — never returned to client except the public key
         tx.set(db.collection("credentials").document(agent_id), {
@@ -508,23 +514,43 @@ async def parse_permissions(request: Request):
 # ─── List all agents ─────────────────────────────────────────────────────────
 
 @app.get("/api/agents")
-async def list_agents():
+async def list_agents(request: Request):
     """
-    Return all registered agents with their permissions and credential status merged in.
-    Credentials collection is never returned — only the boolean active/revoked status.
+    Return agents visible to the requesting user:
+      - Global seed agents (no owner_uid field) — visible to everyone.
+      - Agents owned by the authenticated user (owner_uid == user's uid).
+    If no token is provided (local dev / unauthenticated), all agents are returned.
     """
+    user_uid = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        id_token = auth_header[7:]
+        try:
+            decoded = firebase_auth.verify_id_token(id_token)
+            user_uid = decoded.get("uid")
+        except Exception as exc:
+            print(f"[list_agents] Token verification failed: {exc}")
+            raise HTTPException(status_code=401, detail="Invalid or expired authentication token")
+
     result = []
     for doc in db.collection("agents").stream():
-        agent = ts_to_iso(doc.to_dict())
-        agent["id"] = doc.id
+        raw = doc.to_dict()
+        doc_uid = raw.get("owner_uid")
 
-        perm_snap = db.collection("permissions").document(doc.id).get()
-        agent["permissions"] = perm_snap.to_dict().get("granted_actions", []) if perm_snap.exists else []
+        # Visibility rule:
+        # - No token provided (local dev): show everything
+        # - Token provided: show global seed agents (no owner_uid) OR user's own agents
+        if auth_header == "" or doc_uid is None or doc_uid == user_uid:
+            agent = ts_to_iso(raw)
+            agent["id"] = doc.id
 
-        cred_snap = db.collection("credentials").document(doc.id).get()
-        agent["credential_active"] = cred_snap.to_dict().get("active", False) if cred_snap.exists else False
+            perm_snap = db.collection("permissions").document(doc.id).get()
+            agent["permissions"] = perm_snap.to_dict().get("granted_actions", []) if perm_snap.exists else []
 
-        result.append(agent)
+            cred_snap = db.collection("credentials").document(doc.id).get()
+            agent["credential_active"] = cred_snap.to_dict().get("active", False) if cred_snap.exists else False
+
+            result.append(agent)
 
     result.sort(key=lambda a: a.get("created_at", ""), reverse=True)
     return JSONResponse(result)

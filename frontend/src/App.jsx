@@ -68,7 +68,8 @@ export default function App() {
   const fetchAgents = useCallback(async () => {
     setLoading(true);
     try {
-      const res  = await api.get('/api/agents');
+      const token = user ? await user.getIdToken() : null;
+      const res  = await api.get('/api/agents', token);
       const data = await res.json();
       setAgents(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -76,7 +77,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   // ── Real-time Firestore Audit Log Listener (onSnapshot) ────────
   useEffect(() => {

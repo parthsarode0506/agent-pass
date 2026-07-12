@@ -6,7 +6,11 @@
 const BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 export const api = {
-  get: (path) => fetch(`${BASE}${path}`),
+  get: (path, authToken) => {
+    const headers = {};
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    return fetch(`${BASE}${path}`, { headers });
+  },
   post: (path, body, authToken) => {
     const headers = { 'Content-Type': 'application/json' };
     if (authToken) {
