@@ -218,11 +218,6 @@ export default function App() {
       {/* ── Footer ── */}
       <footer className="y2k-footer">
         <div>AgentID v2006.1 · All rights reserved</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span>HIT COUNTER:</span>
-          <span className="hit-counter">{String(logs.length).padStart(6, '0')}</span>
-        </div>
-
       </footer>
 
       {/* ── AIM Buddy Profile Modal ── */}
