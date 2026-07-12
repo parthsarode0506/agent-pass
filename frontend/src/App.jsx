@@ -19,6 +19,7 @@ export default function App() {
   const [user, setUser]               = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError]     = useState('');
+  const [loginToast, setLoginToast]   = useState(null); // { name, photoURL }
   const [muted, setMutedState]        = useState(getMuted());
   const [agents, setAgents]           = useState([]);
   const [logs, setLogs]               = useState([]);
@@ -27,6 +28,7 @@ export default function App() {
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [detailAgent, setDetailAgent] = useState(null);
   const [auditStats, setAuditStats]   = useState({ allowed: 0, blocked: 0, total: 0 });
+  const prevUserRef = React.useRef(null);
 
   // ── Y2K Boot Sequence ───────────────────────────────────────────
   useEffect(() => {
@@ -40,6 +42,12 @@ export default function App() {
   // ── Firebase Auth Listener ────────────────────────────────────────
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      // Show welcome toast only when transitioning from logged-out → logged-in
+      if (firebaseUser && !prevUserRef.current) {
+        setLoginToast({ name: firebaseUser.displayName || firebaseUser.email, photoURL: firebaseUser.photoURL });
+        setTimeout(() => setLoginToast(null), 4500);
+      }
+      prevUserRef.current = firebaseUser;
       setUser(firebaseUser);
       setAuthLoading(false);
     });
@@ -374,6 +382,37 @@ export default function App() {
                   <button className="y2k-btn y2k-btn-purple" onClick={() => setDetailAgent(null)}>Close Info</button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Login Welcome Toast ─────────────────────────────── */}
+      {loginToast && (
+        <div style={{
+          position: 'fixed', bottom: 28, right: 28, zIndex: 9999,
+          background: 'linear-gradient(135deg, #0a1628 0%, #0d2040 100%)',
+          border: '1.5px solid #00ff88',
+          borderRadius: 10,
+          boxShadow: '0 0 30px rgba(0,255,136,0.35), 0 4px 24px rgba(0,0,0,0.6)',
+          padding: '14px 20px',
+          display: 'flex', alignItems: 'center', gap: 14,
+          minWidth: 280, maxWidth: 360,
+          animation: 'toastSlideIn 0.4s cubic-bezier(0.34,1.56,0.64,1)',
+        }}>
+          {loginToast.photoURL
+            ? <img src={loginToast.photoURL} alt="avatar" style={{ width: 38, height: 38, borderRadius: '50%', border: '2px solid #00ff88', flexShrink: 0 }} />
+            : <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#1a3a5c', border: '2px solid #00ff88', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>👤</div>
+          }
+          <div>
+            <div style={{ color: '#00ff88', fontWeight: 'bold', fontSize: 13, fontFamily: 'monospace', letterSpacing: 0.5 }}>
+              ✅ LOGIN SUCCESSFUL
+            </div>
+            <div style={{ color: '#e0f0ff', fontSize: 12, marginTop: 3, fontFamily: 'monospace' }}>
+              Welcome, <span style={{ color: '#7dd3fc', fontWeight: 'bold' }}>{loginToast.name}</span>
+            </div>
+            <div style={{ color: '#8ab4d4', fontSize: 11, marginTop: 4, fontFamily: 'monospace', lineHeight: 1.4 }}>
+              🔒 Your agents are private to your login only
             </div>
           </div>
         </div>
