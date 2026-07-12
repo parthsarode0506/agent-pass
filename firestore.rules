@@ -28,7 +28,7 @@ service cloud.firestore {
     // never client-writable. If a browser could write here it could fake
     // a "granted" entry without ever passing a real check.
     match /audit_log/{logId} {
-      allow read: if true;
+      allow read: if request.auth != null && (resource == null || !('owner_uid' in resource.data) || resource.data.owner_uid == request.auth.uid);
       allow write: if false;
     }
 

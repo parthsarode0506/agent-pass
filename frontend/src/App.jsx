@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './styles.css';
 import { app, auth, googleProvider } from './firebase';
-import { getFirestore, collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, query, orderBy, limit, where } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import { playStartup, setMuted, getMuted } from './utils/audio.js';
 import { api } from './utils/api.js';
@@ -89,7 +89,18 @@ export default function App() {
 
   // ── Real-time Firestore Audit Log Listener (onSnapshot) ────────
   useEffect(() => {
-    const q = query(collection(db, 'audit_log'), orderBy('timestamp', 'desc'), limit(100));
+    if (!user) {
+      setLogs([]);
+      setAuditStats({ allowed: 0, blocked: 0, total: 0 });
+      return;
+    }
+
+    // Query logs where owner_uid matches authenticated user.
+    // Querying without orderBy timestamp avoids composite index requirement, sorting in-memory.
+    const q = query(
+      collection(db, 'audit_log'),
+      where('owner_uid', '==', user.uid)
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const logsList = [];
       snapshot.forEach((doc) => {
@@ -106,21 +117,30 @@ export default function App() {
           timestamp: timestampIso
         });
       });
-      setLogs(logsList);
+      // Sort in-memory desc
+      logsList.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      const slicedLogs = logsList.slice(0, 100);
+      setLogs(slicedLogs);
 
       // Tally stats: exclude registration-only entries from connection counts
-      const connections = logsList.filter(l => l.action !== 'register');
+      const connections = slicedLogs.filter(l => l.action !== 'register');
       const allowed = connections.filter(l => l.result === 'granted').length;
       const blocked = connections.filter(l => l.result === 'denied').length;
       setAuditStats({ allowed, blocked, total: allowed + blocked });
+    }, (error) => {
+      console.error('Audit logs listener failed:', error);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
-    fetchAgents();
-  }, [fetchAgents]);
+    if (user) {
+      fetchAgents();
+    } else {
+      setAgents([]);
+    }
+  }, [fetchAgents, user]);
 
   const handleSelectBuddy = (agentId) => {
     setSelectedAgentId(agentId);
@@ -252,6 +272,7 @@ export default function App() {
             onRefresh={fetchAgents}
             onRevoke={fetchAgents}
             loading={loading}
+            user={user}
           />
 
           {/* ── Right: Security Command Center Window ── */}

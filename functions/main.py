@@ -174,9 +174,10 @@ def write_audit_log(
     result: str,        # "granted" | "denied"
     reason: str,
     risk_note: str = "",
+    owner_uid: str = None,
 ) -> None:
     """Append one audit log entry to Firestore with an auto-generated doc ID."""
-    db.collection("audit_log").add({
+    entry = {
         "agent_id": agent_id,
         "agent_name": agent_name,
         "action": action,
@@ -186,7 +187,10 @@ def write_audit_log(
         "reason": reason,
         "risk_note": risk_note,
         "timestamp": datetime.now(timezone.utc),
-    })
+    }
+    if owner_uid:
+        entry["owner_uid"] = owner_uid
+    db.collection("audit_log").add(entry)
 
 
 def ts_to_iso(obj: dict) -> dict:
@@ -329,6 +333,7 @@ async def register_agent(request: Request):
         permission_check=None,
         result="granted",
         reason="Agent registered successfully",
+        owner_uid=user_uid,
     )
 
     return JSONResponse({
@@ -384,9 +389,14 @@ async def attempt_action(agent_id: str, request: Request):
     if not action:
         raise HTTPException(status_code=400, detail="'action' is required")
 
-    # Best-effort agent name fetch for audit log display
+    # Best-effort agent name and owner_uid fetch for audit log display
     agent_snap = db.collection("agents").document(agent_id).get()
-    agent_name = agent_snap.to_dict().get("name", agent_id) if agent_snap.exists else agent_id
+    agent_name = agent_id
+    owner_uid = None
+    if agent_snap.exists:
+        agent_data = agent_snap.to_dict()
+        agent_name = agent_data.get("name", agent_id)
+        owner_uid = agent_data.get("owner_uid")
 
     # ─── Step 1: Identity ───────────────────────────────────────────────────
     cred_snap = db.collection("credentials").document(agent_id).get()
@@ -413,7 +423,7 @@ async def attempt_action(agent_id: str, request: Request):
 
     if not identity_passed:
         risk_note = generate_risk_note(agent_id, action, False, False)
-        write_audit_log(agent_id, agent_name, action, False, None, "denied", identity_reason, risk_note)
+        write_audit_log(agent_id, agent_name, action, False, None, "denied", identity_reason, risk_note, owner_uid)
         return JSONResponse({
             "agent_id": agent_id,
             "action": action,
@@ -446,7 +456,7 @@ async def attempt_action(agent_id: str, request: Request):
 
     final_result = "granted" if permission_passed else "denied"
     risk_note = generate_risk_note(agent_id, action, True, permission_passed)
-    write_audit_log(agent_id, agent_name, action, True, permission_passed, final_result, permission_reason, risk_note)
+    write_audit_log(agent_id, agent_name, action, True, permission_passed, final_result, permission_reason, risk_note, owner_uid)
 
     return JSONResponse({
         "agent_id": agent_id,
@@ -559,30 +569,72 @@ async def list_agents(request: Request):
 # ─── Audit log endpoints ──────────────────────────────────────────────────────
 
 @app.get("/api/audit-log")
-async def get_audit_log():
-    """Full audit history across all agents, newest first (max 200 entries)."""
+async def get_audit_log(request: Request):
+    """Audit history visible to the requesting user."""
+    user_uid = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        id_token = auth_header[7:]
+        try:
+            decoded = firebase_auth.verify_id_token(id_token)
+            user_uid = decoded.get("uid")
+        except Exception as exc:
+            print(f"[get_audit_log] Token verification failed: {exc}")
+            raise HTTPException(status_code=401, detail="Invalid or expired authentication token")
+
     logs = []
     try:
-        query = db.collection("audit_log").order_by(
-            "timestamp", direction=firestore.Query.DESCENDING
-        ).limit(200)
+        if auth_header == "":
+            query = db.collection("audit_log").order_by(
+                "timestamp", direction=firestore.Query.DESCENDING
+            ).limit(200)
+        else:
+            query = db.collection("audit_log").where("owner_uid", "==", user_uid).order_by(
+                "timestamp", direction=firestore.Query.DESCENDING
+            ).limit(200)
+            
         for doc in query.stream():
             entry = ts_to_iso(doc.to_dict())
             entry["id"] = doc.id
             logs.append(entry)
-    except Exception:
+    except Exception as exc:
+        print(f"[get_audit_log] Ordered query failed, falling back to in-memory filter: {exc}")
         # Fallback if index isn't built yet — sort in-memory
-        for doc in db.collection("audit_log").limit(200).stream():
-            entry = ts_to_iso(doc.to_dict())
-            entry["id"] = doc.id
-            logs.append(entry)
+        for doc in db.collection("audit_log").stream():
+            raw = doc.to_dict()
+            if auth_header == "" or raw.get("owner_uid") == user_uid:
+                entry = ts_to_iso(raw)
+                entry["id"] = doc.id
+                logs.append(entry)
         logs.sort(key=lambda e: e.get("timestamp", ""), reverse=True)
+        logs = logs[:200]
     return JSONResponse(logs)
 
 
 @app.get("/api/agents/{agent_id}/audit-log")
-async def get_agent_audit_log(agent_id: str):
+async def get_agent_audit_log(agent_id: str, request: Request):
     """Audit history for one agent, newest first."""
+    user_uid = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        id_token = auth_header[7:]
+        try:
+            decoded = firebase_auth.verify_id_token(id_token)
+            user_uid = decoded.get("uid")
+        except Exception as exc:
+            print(f"[get_agent_audit_log] Token verification failed: {exc}")
+            raise HTTPException(status_code=401, detail="Invalid or expired authentication token")
+
+    # Verify agent exists
+    agent_snap = db.collection("agents").document(agent_id).get()
+    if not agent_snap.exists:
+        raise HTTPException(status_code=404, detail="Agent not found")
+        
+    agent_data = agent_snap.to_dict()
+    # Check permission
+    if auth_header != "" and agent_data.get("owner_uid") is not None and agent_data.get("owner_uid") != user_uid:
+        raise HTTPException(status_code=403, detail="Access denied: You do not own this agent")
+
     logs = []
     try:
         query = (
@@ -607,27 +659,48 @@ async def get_agent_audit_log(agent_id: str):
 # ─── Revoke an agent ─────────────────────────────────────────────────────────
 
 @app.post("/api/agents/{agent_id}/revoke")
-async def revoke_agent(agent_id: str):
+async def revoke_agent(agent_id: str, request: Request):
     """
     Revoke an agent's credentials.
     Sets credentials/{agent_id}.active = false and agents/{agent_id}.status = "revoked".
-    All future identity checks for this agent will fail.
+    Only the agent's owner is permitted to perform this.
     """
-    cred_ref = db.collection("credentials").document(agent_id)
-    if not cred_ref.get().exists:
+    user_uid = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        id_token = auth_header[7:]
+        try:
+            decoded = firebase_auth.verify_id_token(id_token)
+            user_uid = decoded.get("uid")
+        except Exception as exc:
+            print(f"[revoke_agent] Token verification failed: {exc}")
+            raise HTTPException(status_code=401, detail="Invalid or expired authentication token")
+
+    agent_ref = db.collection("agents").document(agent_id)
+    agent_snap = agent_ref.get()
+    if not agent_snap.exists:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
+    agent_data = agent_snap.to_dict()
+    if auth_header != "" and agent_data.get("owner_uid") is not None and agent_data.get("owner_uid") != user_uid:
+        raise HTTPException(status_code=403, detail="Access denied: You do not own this agent")
+
+    cred_ref = db.collection("credentials").document(agent_id)
+    if not cred_ref.get().exists:
+        raise HTTPException(status_code=404, detail=f"Credentials for '{agent_id}' not found")
+
     cred_ref.update({"active": False})
-    db.collection("agents").document(agent_id).update({"status": "revoked"})
+    agent_ref.update({"status": "revoked"})
 
     write_audit_log(
         agent_id=agent_id,
-        agent_name=agent_id,
+        agent_name=agent_data.get("name", agent_id),
         action="revoke",
         identity_check=True,
         permission_check=None,
         result="granted",
-        reason="Agent credentials revoked by administrator",
+        reason="Agent credentials revoked by owner",
+        owner_uid=agent_data.get("owner_uid"),
     )
     return JSONResponse({"agent_id": agent_id, "status": "revoked"})
 

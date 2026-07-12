@@ -3,7 +3,7 @@ import { api } from '../utils/api.js';
 
 export default function AgentRegistry({
   agents, selectedAgentId, onSelectBuddy, onOpenDetails,
-  onAddBuddy, onRefresh, onRevoke, loading
+  onAddBuddy, onRefresh, onRevoke, loading, user
 }) {
   const [revoking, setRevoking] = useState(null);
   const [search, setSearch] = useState('');
@@ -24,7 +24,8 @@ export default function AgentRegistry({
     if (!window.confirm(`Are you sure you want to remove and permanently revoke buddy "${agent.name}"?`)) return;
     setRevoking(agent.id);
     try {
-      await api.post(`/api/agents/${agent.id}/revoke`, {});
+      const token = user ? await user.getIdToken() : null;
+      await api.post(`/api/agents/${agent.id}/revoke`, {}, token);
       onRevoke();
     } catch (err) {
       console.error('Revoke failed', err);
