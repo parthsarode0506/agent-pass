@@ -14,8 +14,9 @@ const ALL_PERMISSIONS = [
   { id: 'files:write',    label: 'Files: Write/Export' },
 ];
 
-function RegistrationForm({ onRegistered, onBack }) {
-  const [form, setForm]             = useState({ name: '', owner: '', purpose: '' });
+function RegistrationForm({ user, onRegistered, onBack }) {
+  const ownerName = user?.displayName || user?.email || '';
+  const [form, setForm]             = useState({ name: '', owner: ownerName, purpose: '' });
   const [permissions, setPermissions] = useState([]);
   const [nlText, setNlText]         = useState('');
   const [parsing, setParsing]       = useState(false);
@@ -38,19 +39,21 @@ function RegistrationForm({ onRegistered, onBack }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.owner.trim()) {
-      setError('Agent Name and Owner Name are required.');
+    if (!form.name.trim()) {
+      setError('Agent Name is required.');
       return;
     }
     setError('');
     setLoading(true);
     try {
+      // Get Firebase Auth ID token for backend verification
+      const idToken = user ? await user.getIdToken() : null;
       const res  = await api.post('/api/agents/register', {
         name: form.name.trim(),
-        owner: form.owner.trim(),
+        owner: ownerName,
         purpose: form.purpose.trim(),
         permissions,
-      });
+      }, idToken);
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Registration failed');
       
@@ -65,7 +68,7 @@ function RegistrationForm({ onRegistered, onBack }) {
   };
 
   const nameSlug = form.name.toUpperCase().replace(/[^A-Z0-9]/g,'') || '???';
-  const ownerSlug = form.owner.toUpperCase().replace(/[^A-Z0-9]/g,'') || '???';
+  const ownerSlug = ownerName.toUpperCase().replace(/[^A-Z0-9]/g,'') || '???';
 
   return (
     <form onSubmit={handleSubmit}>
@@ -93,10 +96,12 @@ function RegistrationForm({ onRegistered, onBack }) {
           </div>
 
           <div className="win-field-group">
-            <label className="win-label">Owner Name *</label>
-            <input className="win-input" placeholder='e.g. "Rahul"'
-              value={form.owner} onChange={e => setForm(f => ({...f, owner: e.target.value}))}
-              disabled={loading} required />
+            <label className="win-label">Owner Name (Google Account)</label>
+            <input className="win-input win-input-readonly" placeholder="Owner"
+              value={ownerName} readOnly />
+            <div className="owner-linked-note">
+              🔗 Linked to your Google account
+            </div>
           </div>
 
           <div className="win-field-group">
@@ -226,7 +231,7 @@ function CredentialIssued({ agent, onDone, onRegisterAnother }) {
   );
 }
 
-export default function RegisterPage({ onRegistered, onBack }) {
+export default function RegisterPage({ user, onRegistered, onBack }) {
   const [issued, setIssued] = useState(null);
 
   const handleRegistered = (agentData) => {
@@ -244,5 +249,5 @@ export default function RegisterPage({ onRegistered, onBack }) {
     );
   }
 
-  return <RegistrationForm onRegistered={handleRegistered} onBack={onBack} />;
+  return <RegistrationForm user={user} onRegistered={handleRegistered} onBack={onBack} />;
 }

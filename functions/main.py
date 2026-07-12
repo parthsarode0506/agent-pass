@@ -19,7 +19,7 @@ import pathlib
 from datetime import datetime, timezone
 
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, auth as firebase_auth
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -238,6 +238,19 @@ async def register_agent(request: Request):
     owner = (data.get("owner") or "").strip()
     purpose = (data.get("purpose") or "").strip()
     permissions = [p for p in (data.get("permissions") or []) if isinstance(p, str)]
+
+    # --- Verify Firebase Auth token and override owner with verified identity ---
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        id_token = auth_header[7:]
+        try:
+            decoded = firebase_auth.verify_id_token(id_token)
+            # Override owner with the authenticated user's name or email
+            owner = decoded.get("name") or decoded.get("email", owner)
+            print(f"[register] Verified Firebase Auth user: {owner} (uid={decoded['uid']})")
+        except Exception as exc:
+            print(f"[register] Token verification failed: {exc}")
+            raise HTTPException(status_code=401, detail="Invalid or expired authentication token")
 
     if not name:
         raise HTTPException(status_code=400, detail="'name' is required")

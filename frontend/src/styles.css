@@ -1049,3 +1049,192 @@ html {
   width: 480px;
   max-width: 95vw;
 }
+
+/* ─── Google Sign-In Screen ─────────────────────────────────────── */
+.y2k-signin-screen {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at 40% 30%, #0c1a3a 0%, #050d1f 60%, #000209 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.signin-card {
+  background: var(--y2k-panel-gradient);
+  border: 1.5px solid var(--y2k-panel-border);
+  border-radius: var(--y2k-panel-radius);
+  padding: 40px 48px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  max-width: 420px;
+  width: 90vw;
+}
+
+.signin-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--y2k-glass-overlay);
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.signin-subtitle {
+  color: #7ee8d8;
+  font-style: italic;
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  margin-top: 6px;
+  margin-bottom: 20px;
+}
+
+.signin-description {
+  color: #adc8e0;
+  font-size: 11px;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.signin-google-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 28px;
+  font-size: 13px;
+  font-weight: bold;
+  font-family: var(--font-chrome), sans-serif;
+  color: #fff;
+  background: var(--btn-blue-gradient);
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  border-radius: 14px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 4px 14px rgba(10, 127, 224, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  letter-spacing: 0.5px;
+}
+
+.signin-google-btn::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 50%;
+  background: linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 100%);
+  pointer-events: none;
+  border-radius: 14px 14px 0 0;
+}
+
+.signin-google-btn:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 6px 20px rgba(10, 127, 224, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.signin-google-btn:active {
+  transform: translateY(0);
+}
+
+.signin-google-btn .google-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.signin-error {
+  margin-top: 14px;
+  color: var(--status-denied);
+  font-size: 11px;
+  background: rgba(255, 61, 94, 0.12);
+  border: 1px solid rgba(255, 61, 94, 0.3);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.signin-footer {
+  margin-top: 20px;
+  color: #adc8e0;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+/* ─── Header User Info ──────────────────────────────────────────── */
+.header-user-area {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+}
+
+.header-user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+}
+
+.header-user-name {
+  font-size: 11px;
+  color: #7ee8d8;
+  font-weight: bold;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-signout-btn {
+  background: rgba(255, 61, 94, 0.15);
+  border: 1px solid rgba(255, 61, 94, 0.3);
+  color: var(--status-denied);
+  font-size: 10px;
+  font-weight: bold;
+  padding: 5px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.header-signout-btn:hover {
+  background: rgba(255, 61, 94, 0.3);
+}
+
+/* ─── Read-only Owner Input ─────────────────────────────────────── */
+.win-input-readonly {
+  background: rgba(126, 232, 216, 0.08) !important;
+  border-color: rgba(126, 232, 216, 0.3) !important;
+  color: #7ee8d8 !important;
+  cursor: default;
+  font-weight: bold;
+}
+
+.owner-linked-note {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  color: #7ee8d8;
+  margin-top: 3px;
+  font-style: italic;
+}
