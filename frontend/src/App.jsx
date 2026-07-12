@@ -215,10 +215,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── Footer ── */}
-      <footer className="y2k-footer">
-        <div>AgentID v2006.1 · All rights reserved</div>
-      </footer>
+
 
       {/* ── AIM Buddy Profile Modal ── */}
       {detailAgent && (
