@@ -108,7 +108,7 @@ export default function AuditLogViewer({ logs, stats, onRefresh }) {
                     <tr
                       key={log.id}
                       style={{
-                        background: isAllow ? 'rgba(34, 224, 122, 0.04)' : 'rgba(255, 61, 94, 0.04)',
+                        background: isAllow ? 'rgba(34, 224, 122, 0.08)' : 'rgba(255, 61, 94, 0.08)',
                         transition: 'background 0.3s ease'
                       }}
                     >

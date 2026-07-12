@@ -6,11 +6,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
 
 :root {
-  /* Glossy glass panel */
-  --y2k-panel-gradient: linear-gradient(135deg, rgba(10, 95, 201, 0.45) 0%, rgba(47, 157, 232, 0.4) 35%, rgba(95, 208, 232, 0.35) 65%, rgba(126, 232, 216, 0.3) 100%);
-  --y2k-panel-border: rgba(255, 255, 255, 0.55);
+  /* Glossy glass panel - Darker blue/teal theme for excellent text contrast */
+  --y2k-panel-gradient: linear-gradient(135deg, rgba(8, 26, 60, 0.85) 0%, rgba(12, 45, 95, 0.8) 35%, rgba(18, 65, 120, 0.75) 65%, rgba(22, 78, 140, 0.7) 100%);
+  --y2k-panel-border: rgba(255, 255, 255, 0.4);
   --y2k-panel-radius: 20px;
-  --y2k-glass-overlay: linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.05) 40%, rgba(255, 255, 255, 0) 60%);
+  --y2k-glass-overlay: linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.05) 40%, rgba(255, 255, 255, 0) 60%);
 
   /* Chrome/metallic text */
   --chrome-text-gradient: linear-gradient(180deg, #ffffff 0%, #cfd9e8 30%, #7f97b8 55%, #ffffff 80%, #a9bdd6 100%);
@@ -324,7 +324,7 @@ html {
 
 .aim-buddy-away-msg {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.95);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
