@@ -1,17 +1,16 @@
 import { initializeApp } from 'firebase/app';
 
-// Firebase configuration — loaded from .env (Vite exposes VITE_* via import.meta.env)
-// These values point to the REAL Firebase project — no emulator connections here.
+// Public client-safe config. Inlined to prevent missing values on Render build servers.
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: "AIzaSyBXrdASMSBQfurGF2Y1LehMgU-G4eBAzoo",
+  authDomain: "rift-2ef56.firebaseapp.com",
+  projectId: "rift-2ef56",
+  storageBucket: "rift-2ef56.firebasestorage.app",
+  messagingSenderId: "215422185703",
+  appId: "1:215422185703:web:c6a754aa71ec821573b242",
+  measurementId: "G-2HQN6PJLZ0"
 };
 
-// Initialize Firebase (real cloud project, no emulator)
 const app = initializeApp(firebaseConfig);
 
 export { app };
